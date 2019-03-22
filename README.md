@@ -50,11 +50,11 @@ This syntax is designed to be familiar to Clojure developers.
 [1 5 7 {"hello" true}]
 
 ; data at provided path in the root context of the document.
-@@[:persons 0 :name]
-@@:persons
+_@@[:persons 0 :name]
+_@:persons
 
 ; data at provided relative path in the current context.
-@[:name]
+@@[:persons 0 :name]
 @:name
 
 ; thread operation
