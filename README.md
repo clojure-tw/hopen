@@ -1,5 +1,6 @@
 # hopen 『活板』
 [![Build Status](https://api.travis-ci.org/clojure-tw/hopen.svg?branch=master)](https://travis-ci.org/clojure-tw/hopen)
+[![Circle CI](https://circleci.com/setup-project/gh/clojure-tw/hopen.svg?style=svg)](https://circleci.com/gh/clojure-tw/hopen)
 
 A simple, modern, flexible and portable template engine for Clojure environments.
 
