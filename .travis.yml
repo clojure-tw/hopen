@@ -1,0 +1,7 @@
+language: clojure
+sudo: false
+jdk:
+  - openjdk11
+lein: ~/bin/lein
+script:
+- lein test
