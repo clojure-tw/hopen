@@ -2,6 +2,9 @@ language: clojure
 sudo: false
 jdk:
   - openjdk11
+before_install:
+  - wget https://raw.github.com/technomancy/leiningen/stable/bin/lein -P ~/bin/
+  - chmod a+x ~/bin/lein
 lein: ~/bin/lein
 script:
 - lein test
