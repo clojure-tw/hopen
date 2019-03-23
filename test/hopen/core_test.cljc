@@ -35,4 +35,26 @@
               " * "
               3
               " = "
-              9])))))
+              9]))))
+
+  (testing "bindings"
+    (let [data {:name "Alice"
+                :person [{:name "Leonard"}
+                         {:name "Albert"}]}
+          template [[:value "hello "]
+                    [:let ['person0 [:get-in 'hopen/ctx [:person 0]]
+                           'person1 [:get-in 'hopen/ctx [:person 1]]]
+                          [[:get 'person0 :name]
+                           [:value ", "]
+                           [:get 'person1 :name]
+                           [:value " and "]
+                           [:get 'hopen/root :name]]]]]
+      (is (= (into []
+                   (renderer template)
+                   [data])
+             ["hello "
+              "Leonard"
+              ", "
+              "Albert"
+              " and "
+              "Alice"])))))
