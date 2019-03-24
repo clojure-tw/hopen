@@ -8,10 +8,10 @@
     (let [data {:name "Alice"
                 :person [{:name "Leonard"}
                          {:name "Albert"}]}
-          template ["hello "
-                    ('hopen/ctx :name)
-                    " and "
-                    (:get-in 'hopen/ctx [:person 1 :name])]]
+          template '["hello "
+                     (hopen/ctx :name)
+                     " and "
+                     (get-in hopen/ctx [:person 1 :name])]]
       (is (= (into []
                    (renderer template)
                    [data])
@@ -22,12 +22,12 @@
 
   (testing "functions"
     (let [data {:n 3}
-          template [('hopen/ctx :n)
-                    " * "
-                    ('hopen/ctx :n)
-                    " = "
-                    (:square ('hopen/ctx :n))]
-          fns {:square (fn [x] (* x x))}]
+          template '[(hopen/ctx :n)
+                     " * "
+                     (hopen/ctx :n)
+                     " = "
+                     (square (hopen/ctx :n))]
+          fns {'square (fn [x] (* x x))}]
       (is (= (into []
                    (renderer template fns)
                    [data])
@@ -42,18 +42,18 @@
                 :person [{:name "Leonard"}
                          {:name "Albert"
                           :friend {:name "Eugenie"}}]}
-          template ["hello "
-                    (:let ['person0 (:get-in 'hopen/ctx [:person 0])
-                           'person1 (:get-in 'hopen/ctx [:person 1])
-                           'person1-friend ('person1 :friend)]
-                          [('person0 :name)
+          template '["hello "
+                     (let [person0 (get-in hopen/ctx [:person 0])
+                           person1 (get-in hopen/ctx [:person 1])
+                           person1-friend (person1 :friend)]
+                          [(person0 :name)
                            ", "
-                           ('person1 :name)
+                           (person1 :name)
                            " (whose friend is "
-                           ('person1-friend :name)
+                           (person1-friend :name)
                            ") "
                            " and "
-                           ('hopen/root :name)])]]
+                           (hopen/root :name)])]]
       (is (= (into []
                    (renderer template)
                    [data])
@@ -72,17 +72,16 @@
                        {:name "Leonard"}]
                 :girls [{:name "Alice"}
                         {:name "Eugenie"}]
-                :activities [{:name "play SNES"}
-                             {:name "learn Clojure"}]}
-          ;; TODO: remove :name everywhere and use direct values with 'symb
-          template [(:for ['boy ('hopen/ctx :boys)
-                           'girl ('hopen/ctx :girls)
-                           'activity ('hopen/ctx :activities)]
-                          [('girl :name)
+                :activities ["play SNES"
+                             "learn Clojure"]}
+          template '[(for [boy (hopen/ctx :boys)
+                           girl (hopen/ctx :girls)
+                           activity (hopen/ctx :activities)]
+                          [(girl :name)
                            " "
-                           ('activity :name)
+                           activity
                            " with "
-                           ('boy :name)
+                           (boy :name)
                            :newline])]]
       (is (= (into []
                    (comp
