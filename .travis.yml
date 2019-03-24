@@ -1,10 +1,23 @@
 language: clojure
+lein: 2.9.1
+node_js:
+  - "8"
+
 sudo: false
 jdk:
   - openjdk11
+
+services:
+  - xvfb
+
+addons:
+  - firefox: latest
+  - chrome: stable
+
 before_install:
-  - wget https://raw.github.com/technomancy/leiningen/stable/bin/lein -P ~/bin/
-  - chmod a+x ~/bin/lein
-lein: ~/bin/lein
+  - npm install
+
 script:
-- lein test
+  - lein test
+  - lein doo node node-test once
+  - xvfb-run --server-args="-screen 0 1024x768x24" lein doo browsers browser-test once
