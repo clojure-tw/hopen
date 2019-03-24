@@ -37,12 +37,10 @@
                                             (rest args))]
                            (apply f f-args))))
              (let-rf [env result bindings content]
-               (if (seq bindings)
-                 (let [[k val & next-bindings] bindings]
-                   (let-rf (assoc env k (tpl-eval env val))
-                           result
-                           next-bindings
-                           content))
+               (let [env (reduce (fn [env [symb val]]
+                                   (assoc env symb (tpl-eval env val)))
+                                 env
+                                 (partition-all 2 bindings))]
                  (reduce (partial block-rf env)
                          result
                          content)))
