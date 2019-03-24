@@ -7,4 +7,14 @@
   :resource-paths ["resources"]
   :target-path "target/%s"
 
-  :dependencies [[org.clojure/clojure "1.10.0"]])
+  :dependencies [[org.clojure/clojure "1.10.0"]
+                 [org.clojure/clojurescript "1.10.520"]]
+  :plugins [[lein-doo "0.1.10"]]
+  :cljsbuild
+  {:builds [{:id "cljs-test"
+             :source-paths ["src" "test"]
+             :compiler {:output-to "resources/public/js/index.js"
+                        :main hopen.runner
+                        :optimizations :none
+                        :pretty-print true
+                        :target :nodejs}}]})
