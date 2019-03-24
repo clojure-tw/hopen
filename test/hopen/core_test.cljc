@@ -40,13 +40,18 @@
   (testing "bindings"
     (let [data {:name "Alice"
                 :person [{:name "Leonard"}
-                         {:name "Albert"}]}
+                         {:name "Albert"
+                          :friend {:name "Eugenie"}}]}
           template [[:value "hello "]
                     [:let ['person0 [:get-in 'hopen/ctx [:person 0]]
-                           'person1 [:get-in 'hopen/ctx [:person 1]]]
+                           'person1 [:get-in 'hopen/ctx [:person 1]]
+                           'person1-friend [:get 'person1 :friend]]
                           [[:get 'person0 :name]
                            [:value ", "]
                            [:get 'person1 :name]
+                           [:value " (whose friend is "]
+                           [:get 'person1-friend :name]
+                           [:value ") "]
                            [:value " and "]
                            [:get 'hopen/root :name]]]]]
       (is (= (into []
@@ -56,6 +61,9 @@
               "Leonard"
               ", "
               "Albert"
+              " (whose friend is "
+              "Eugenie"
+              ") "
               " and "
               "Alice"]))))
 

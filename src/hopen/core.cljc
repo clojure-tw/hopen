@@ -36,11 +36,18 @@
                                f-args (mapv (partial tpl-eval env)
                                             (rest args))]
                            (apply f f-args))))
-             (for-rf [env result bindings content]
-               (if-not (seq bindings)
+             (let-rf [env result bindings content]
+               (if (seq bindings)
+                 (let [[k val & next-bindings] bindings]
+                   (let-rf (assoc env k (tpl-eval env val))
+                           result
+                           next-bindings
+                           content))
                  (reduce (partial block-rf env)
                          result
-                         content)
+                         content)))
+             (for-rf [env result bindings content]
+               (if (seq bindings)
                  (let [[k coll & next-bindings] bindings]
                    (reduce (fn [result val]
                              (for-rf (assoc env k val)
@@ -48,19 +55,15 @@
                                      next-bindings
                                      content))
                            result
-                           (tpl-eval env coll)))))
+                           (tpl-eval env coll)))
+                 (reduce (partial block-rf env)
+                         result
+                         content)))
              (block-rf [env result [op & args :as element]]
                (case op
                  ;; Block functions are handled here.
-                 :let (let [[bindings content] args
-                            env (into env
-                                      (comp (partition-all 2)
-                                            (map (fn [[k v]]
-                                                   [k (tpl-eval env v)])))
-                                      bindings)]
-                        (reduce (partial block-rf env)
-                                result
-                                content))
+                 :let (let [[bindings content] args]
+                        (let-rf env result bindings content))
                  :for (let [[bindings content] args]
                         (for-rf env result bindings content))
 
