@@ -30,5 +30,9 @@ jobs:
       # run tests!
       - run: lein test
 
+      # prepare karma
+      - run: npm install
+       
       # run cljs test
-      - run: lein doo node cljs-test once
+      - run: lein doo node node-test once
+      - run: lein doo browsers browser-test once

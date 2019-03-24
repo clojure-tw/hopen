@@ -11,10 +11,18 @@
                  [org.clojure/clojurescript "1.10.520"]]
   :plugins [[lein-doo "0.1.10"]]
   :cljsbuild
-  {:builds [{:id "cljs-test"
+  {:builds [{:id "node-test"
              :source-paths ["src" "test"]
              :compiler {:output-to "resources/public/js/index.js"
                         :main hopen.runner
                         :optimizations :none
                         :pretty-print true
-                        :target :nodejs}}]})
+                        :target :nodejs}}
+            {:id "browser-test"
+             :source-paths ["src" "test"]
+             :compiler {:output-to "resources/public/js/index.js"
+                        :main hopen.runner
+                        :optimizations :none
+                        :pretty-print false}}]}
+  :doo {:alias {:browsers [:chrome :firefox]}
+        :paths {:karma "./node_modules/karma/bin/karma"}})
