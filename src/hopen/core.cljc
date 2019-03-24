@@ -26,15 +26,17 @@
      (letfn [(tpl-eval [env [op & args]]
                (case op
                  :value  (first args)
-                 :get    (-> env
-                             (get (first args))
-                             (get (second args)))
-                 :get-in (-> env
-                             (get (first args))
-                             (get-in (second args)))
-                 :fn     (let [f (fns (first args))
-                               f-args (mapv (partial tpl-eval env)
-                                            (rest args))]
+                 :get    (let [[symb key] args]
+                           (-> env
+                               (get symb)
+                               (get key)))
+                 :get-in (let [[symb path] args]
+                           (-> env
+                               (get symb)
+                               (get-in path)))
+                 :fn     (let [[f-key & f-args] args
+                               f (get fns f-key)
+                               f-args (mapv (partial tpl-eval env) f-args)]
                            (apply f f-args))))
              (let-rf [env result bindings content]
                (let [env (reduce (fn [env [symb val]]
