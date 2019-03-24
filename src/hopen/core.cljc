@@ -23,15 +23,8 @@
    (renderer tpl built-in-functions))
   ([tpl fns]
    (fn [rf]
-     (fn
-       ([] (rf))
-       ([result] (rf result))
-       ([result input]
-        (let [env {'hopen/root input
-                   'hopen/ctx input}
-              tpl-eval
-              (fn tpl-eval [env [op & args]]
-                (case op
+     (letfn [(tpl-eval [env [op & args]]
+               (case op
                  :value  (first args)
                  :get    (-> env
                              (get (first args))
@@ -43,25 +36,43 @@
                                f-args (mapv (partial tpl-eval env)
                                             (rest args))]
                            (apply f f-args))))
-              block-rf
-              (fn block-rf [env result [op & args :as element]]
-                (case op
-                  ;; Block functions are handled here.
+             (for-rf [env result bindings content]
+               (if-not (seq bindings)
+                 (reduce (partial block-rf env)
+                         result
+                         content)
+                 (let [[k coll & next-bindings] bindings]
+                   (reduce (fn [result val]
+                             (for-rf (assoc env k val)
+                                     result
+                                     next-bindings
+                                     content))
+                           result
+                           (tpl-eval env coll)))))
+             (block-rf [env result [op & args :as element]]
+               (case op
+                 ;; Block functions are handled here.
+                 :let (let [[bindings content] args
+                            env (into env
+                                      (comp (partition-all 2)
+                                            (map (fn [[k v]]
+                                                   [k (tpl-eval env v)])))
+                                      bindings)]
+                        (reduce (partial block-rf env)
+                                result
+                                content))
+                 :for (let [[bindings content] args]
+                        (for-rf env result bindings content))
 
-                  ;; TODO: implement the binding in env.
-                  :let (let [bindings (first args)
-                             env (into env
-                                       (comp (partition-all 2)
-                                             (map (fn [[k v]]
-                                                    [k (tpl-eval env v)])))
-                                       bindings)]
-                         (reduce (partial block-rf env)
-                                 result
-                                 (second args)))
-
-                  ;; Else clause is for the non-block operations
-                  ;; which evaluate without needing the rf parameter.
-                  (rf result (tpl-eval env element))))]
-          (reduce (partial block-rf env)
-                  result
-                  tpl)))))))
+                 ;; Else clause is for the non-block operations
+                 ;; which evaluate without needing the rf parameter.
+                 (rf result (tpl-eval env element))))]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result input]
+          (let [env {'hopen/root input
+                     'hopen/ctx input}]
+            (reduce (partial block-rf env)
+                    result
+                    tpl))))))))

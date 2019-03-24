@@ -57,4 +57,37 @@
               ", "
               "Albert"
               " and "
-              "Alice"])))))
+              "Alice"]))))
+
+  (testing "for loops"
+    (let [data {:boys [{:name "Albert"}
+                       {:name "Leonard"}]
+                :girls [{:name "Alice"}
+                        {:name "Eugenie"}]
+                :activities [{:name "play SNES"}
+                             {:name "learn Clojure"}]}
+          ;; TODO: remove :name everywhere and use direct values with [:value symb]
+          template [[:for ['boy [:get 'hopen/ctx :boys]
+                           'girl [:get 'hopen/ctx :girls]
+                           'activity [:get 'hopen/ctx :activities]]
+                          [[:get 'girl :name]
+                           [:value " "]
+                           [:get 'activity :name]
+                           [:value " with "]
+                           [:get 'boy :name]
+                           [:value :newline]]]]]
+      (is (= (into []
+                   (comp
+                     (renderer template)
+                     (partition-by #{:newline})
+                     (partition-all 2)
+                     (map #(apply str (first %))))
+                   [data])
+             ["Alice play SNES with Albert"
+              "Alice learn Clojure with Albert"
+              "Eugenie play SNES with Albert"
+              "Eugenie learn Clojure with Albert"
+              "Alice play SNES with Leonard"
+              "Alice learn Clojure with Leonard"
+              "Eugenie play SNES with Leonard"
+              "Eugenie learn Clojure with Leonard"])))))
