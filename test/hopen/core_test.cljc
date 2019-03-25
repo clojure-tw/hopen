@@ -4,7 +4,33 @@
 
 (deftest renderer-test
 
-  (testing "getters"
+  (testing "basic testing"
+    (let [env (merge default-env
+                     {'square (fn [x] (* x x))
+                      'captain {:name "Captain", :age 41}})
+          data {:foo 'bar}]
+      (are [template output]
+        (= (into [] (renderer template env) [data])
+           output)
+
+        ["hi"]                       ["hi"]
+        [[1 2 3]]                    [[1 2 3]]
+        ['captain]                   [{:name "Captain", :age 41}]
+        ['(captain :name)]           ["Captain"]
+        ['{5 captain, (square 3) 4}] [{5 {:age  41, :name "Captain"}, 9 4}]
+        ['(get-in captain [:name])]  ["Captain"]
+        ['hopen/ctx]                 [{:foo 'bar}]
+        ['(hopen/ctx :foo)]          ['bar]
+
+        ['(let [a 3 b (square a)]
+            [a b a b])]
+        [3 9 3 9]
+
+        ['(for [a [:a :b :c] b [1 2]]
+            [a b])]
+        [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2])))
+
+ (testing "getters"
     (let [data {:name "Alice"
                 :person [{:name "Leonard"}
                          {:name "Albert"}]}
