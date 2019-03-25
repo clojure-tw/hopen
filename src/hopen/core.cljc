@@ -85,13 +85,14 @@
 
    ;; Inline functions
    'get-in get-in
+   'range  range
 
    'inc   inc
    'dec   dec
-   '+   +
-   '-   -
-   '*   *
-   '/   /
+   '+     +
+   '-     -
+   '*     *
+   '/     /
    'mod   mod
 
    'str   str
