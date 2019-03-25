@@ -2,80 +2,101 @@
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str]))
 
-(def built-in-functions
-  {:inc   inc
-   :dec   dec
-   :add   +
-   :sub   -
-   :mul   *
-   :div   /
-   :mod   mod
+;; rf-fn are block functions that get the args unevaluated, similarly to macros.
+(defn- rf-fn? [f]
+  (:rf-fn (meta f)))
 
-   :str   str
-   :join  str/join
-   :upper str/upper-case
-   :lower str/lower-case
+(defn- tpl-eval [env element]
+  (letfn [(f-eval [element]
+           (cond
+            (symbol? element) (env element)
+            (vector? element) (into [] (map f-eval) element)
+            (set? element)    (into #{} (map f-eval) element)
+            (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
+            (list? element)   (let [[f-symb & args] element]
+                               (apply (env f-symb) (mapv f-eval args)))
+            :else element))]
+   (f-eval element)))
 
-   ,,,})
+(defn- rf-block [rf env result element]
+  (or (when (list? element)
+        (let [[f-symb & args] element
+              f (env f-symb)]
+          (when (rf-fn? f)
+            (apply f rf env result args))))
+      (rf result (tpl-eval env element))))
+
+(def ^:private rf-for ^:rf-fn
+  (fn [rf env result bindings content]
+    (if (seq bindings)
+      (let [[k coll & next-bindings] bindings]
+        (reduce (fn [result val]
+                  (rf-for rf
+                          (assoc env k val)
+                          result
+                          next-bindings
+                          content))
+                result
+                (tpl-eval env coll)))
+      (reduce (partial rf-block rf env)
+              result
+              content))))
+
+(def ^:private rf-let ^:rf-fn
+  (fn [rf env result bindings content]
+    (let [env (reduce (fn [env [symb val]]
+                        (assoc env symb (tpl-eval env val)))
+                      env
+                      (partition 2 bindings))]
+      (reduce (partial rf-block rf env)
+              result
+              content))))
+
+(def ^:private rf-if ^:rf-fn
+  (fn ([rf env result cond then]
+       (rf-if rf env result cond then nil))
+      ([rf env result cond then else]
+       (reduce (partial rf-block rf env)
+               result
+               (if (tpl-eval env cond) then else)))))
+
+(def ^:private rf-quote ^:rf-fn
+  (fn [rf env result content]
+    (rf result content)))
+
+(def default-env
+  {;; Block functions
+   'for rf-for
+   'let rf-let
+   'if  rf-if
+   'quote rf-quote
+
+   ;; Inline functions
+   'get-in get-in
+
+   'inc   inc
+   'dec   dec
+   '+   +
+   '-   -
+   '*   *
+   '/   /
+   'mod   mod
+
+   'str   str
+   'join  str/join
+   'upper str/upper-case
+   'lower str/lower-case})
 
 (defn renderer
-  ([tpl]
-   (renderer tpl built-in-functions))
-  ([tpl fns]
-   (fn [rf]
-     (letfn [(tpl-eval [env [op & args]]
-               (case op
-                 :value  (first args)
-                 :get    (let [[symb key] args]
-                           (-> env
-                               (get symb)
-                               (get key)))
-                 :get-in (let [[symb path] args]
-                           (-> env
-                               (get symb)
-                               (get-in path)))
-                 :fn     (let [[f-key & f-args] args
-                               f (get fns f-key)
-                               f-args (mapv (partial tpl-eval env) f-args)]
-                           (apply f f-args))))
-             (let-rf [env result bindings content]
-               (let [env (reduce (fn [env [symb val]]
-                                   (assoc env symb (tpl-eval env val)))
-                                 env
-                                 (partition-all 2 bindings))]
-                 (reduce (partial block-rf env)
-                         result
-                         content)))
-             (for-rf [env result bindings content]
-               (if (seq bindings)
-                 (let [[k coll & next-bindings] bindings]
-                   (reduce (fn [result val]
-                             (for-rf (assoc env k val)
-                                     result
-                                     next-bindings
-                                     content))
-                           result
-                           (tpl-eval env coll)))
-                 (reduce (partial block-rf env)
-                         result
-                         content)))
-             (block-rf [env result [op & args :as element]]
-               (case op
-                 ;; Block functions are handled here.
-                 :let (let [[bindings content] args]
-                        (let-rf env result bindings content))
-                 :for (let [[bindings content] args]
-                        (for-rf env result bindings content))
-
-                 ;; Else clause is for the non-block operations
-                 ;; which evaluate without needing the rf parameter.
-                 (rf result (tpl-eval env element))))]
-       (fn
-         ([] (rf))
-         ([result] (rf result))
-         ([result input]
-          (let [env {'hopen/root input
-                     'hopen/ctx input}]
-            (reduce (partial block-rf env)
-                    result
-                    tpl))))))))
+  ([tpl] (renderer tpl default-env))
+  ([tpl env] (fn [rf]
+               (fn
+                 ([] (rf))
+                 ([result] (rf result))
+                 ([result input]
+                  (let [env (assoc env
+                              'hopen/root input
+                              'hopen/ctx input)]
+                    (reduce (partial rf-block rf env)
+                            result
+                            tpl)))))))
