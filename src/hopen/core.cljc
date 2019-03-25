@@ -52,6 +52,14 @@
               result
               content))))
 
+(def ^:private rf-if ^:rf-fn
+  (fn ([rf env result cond then]
+       (rf-if rf env result cond then nil))
+      ([rf env result cond then else]
+       (reduce (partial rf-block rf env)
+               result
+               (if (tpl-eval env cond) then else)))))
+
 (def ^:private rf-quote ^:rf-fn
   (fn [rf env result content]
     (rf result content)))
@@ -60,6 +68,7 @@
   {;; Block functions
    'for rf-for
    'let rf-let
+   'if  rf-if
    'quote rf-quote
 
    ;; Inline functions

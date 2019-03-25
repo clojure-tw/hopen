@@ -24,6 +24,11 @@
         ['(quote a)]                 ['a]
         ['(quote (a b c))]           ['(a b c)]
 
+        ['(if true  [1 2])]          [1 2]
+        ['(if false [1 2])]          []
+        ['(if true  [1 2] [3 4])]    [1 2]
+        ['(if false [1 2] [3 4])]    [3 4]
+
         ['(let [a 3 b (square a)]
             [a b a b])]
         [3 9 3 9]
