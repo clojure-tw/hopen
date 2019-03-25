@@ -37,7 +37,18 @@
 
         ['(for [a [:a :b :c] b [1 2]]
             [a b])]
-        [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2])))
+        [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2]
+
+        ['(interpose ", " ["Alice" "Bernard" "Eugenie"])]
+        ["Alice" ", " "Bernard" ", " "Eugenie"]
+
+        ['(interpose (for [v [:sep1 :sep2]] [v])
+                     [:x (for [a [:a :b] b [1 2]] [a b]) :y])]
+        [:x
+         :sep1 :sep2
+         :a 1 :a 2 :b 1 :b 2
+         :sep1 :sep2
+         :y])))
 
  (testing "getters"
     (let [data {:name "Alice"

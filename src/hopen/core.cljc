@@ -64,12 +64,24 @@
   (fn [rf env result content]
     (rf result content)))
 
+;; Note: the separator is evaluated multiple times.
+;; Use a `let` if you need to reduce the performance impact.
+(def ^:private rf-interpose ^:rf-fn
+  (fn [rf env result separator content]
+    (reduce ((interpose separator)
+             (partial rf-block rf env))
+            result
+            content)))
+
 (def default-env
   {;; Block functions
    'for rf-for
    'let rf-let
    'if  rf-if
    'quote rf-quote
+
+   ;; Block functions based on transducers
+   'interpose rf-interpose
 
    ;; Inline functions
    'get-in get-in
