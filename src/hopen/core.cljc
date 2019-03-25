@@ -52,10 +52,15 @@
               result
               content))))
 
+(def ^:private rf-quote ^:rf-fn
+  (fn [rf env result content]
+    (rf result content)))
+
 (def default-env
   {;; Block functions
-   'let rf-let
    'for rf-for
+   'let rf-let
+   'quote rf-quote
 
    ;; Inline functions
    'get-in get-in

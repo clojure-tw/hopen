@@ -17,10 +17,12 @@
         [[1 2 3]]                    [[1 2 3]]
         ['captain]                   [{:name "Captain", :age 41}]
         ['(captain :name)]           ["Captain"]
-        ['{5 captain, (square 3) 4}] [{5 {:age  41, :name "Captain"}, 9 4}]
+        ['{5 captain, (square 3) 4}] [{5 {:name "Captain", :age 41}, 9 4}]
         ['(get-in captain [:name])]  ["Captain"]
         ['hopen/ctx]                 [{:foo 'bar}]
         ['(hopen/ctx :foo)]          ['bar]
+        ['(quote a)]                 ['a]
+        ['(quote (a b c))]           ['(a b c)]
 
         ['(let [a 3 b (square a)]
             [a b a b])]
