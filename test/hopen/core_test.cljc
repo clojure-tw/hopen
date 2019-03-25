@@ -1,8 +1,8 @@
 (ns hopen.core-test
-  #?(:clj (:require [clojure.test :refer :all]
-                    [hopen.core :refer :all])
-     :cljs (:require [cljs.test :include-macros true :refer [deftest testing is]]
-                     [hopen.core :refer [renderer]])))
+  (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
+               :cljs [cljs.test    :refer [deftest testing is are]
+                                   :include-macros true])
+            [hopen.core :refer [renderer default-env]]))
 
 (deftest renderer-test
 
