@@ -47,9 +47,15 @@
         ['(inc (let [a 2 b 3] (+ a b)))] [6]
 
         ;; Block for
-        ['(for [a [:a :b :c] b (range 1 (+ 1 2))]
+        ['(for [a [:a :b :c]
+                b (range 1 3)]
             [a b])]
         [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2]
+
+        ['(for [a [:a :b :c] :join "|"
+                b (range 1 3) :join "-"]
+            [a b])]
+        [:a 1 "-" :a 2 "|" :b 1 "-" :b 2 "|" :c 1 "-" :c 2]
 
         ;; Inline for
         ['(conj (for [a [:a :b :c] b (range 2)] [a b]) :x)]
