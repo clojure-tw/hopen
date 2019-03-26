@@ -2,10 +2,6 @@
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str]))
 
-;; rf-fn are block functions that get the args unevaluated, similarly to macros.
-(defn- rf-fn? [f]
-  (:rf-fn (meta f)))
-
 (defn- tpl-eval [env element]
   (letfn [(f-eval [element]
            (cond
@@ -14,74 +10,89 @@
             (set? element)    (into #{} (map f-eval) element)
             (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
             (list? element)   (let [[f-symb & args] element]
-                               (apply (env f-symb) (mapv f-eval args)))
+                                (if-let [f (get-in env [:hopen/inline-macro f-symb])]
+                                  (apply f f-eval args)
+                                  (if-let [f (env f-symb)]
+                                    (apply f (mapv f-eval args))
+                                    (throw (#?(:clj  Exception.
+                                               :cljs js/Error.)
+                                             (str "Function " f-symb "not found"))))))
             :else element))]
    (f-eval element)))
 
 (defn- rf-block [rf env result element]
   (or (when (list? element)
         (let [[f-symb & args] element
-              f (env f-symb)]
-          (when (rf-fn? f)
+              f (get-in env [:hopen/block-macro f-symb])]
+          (when f
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
 
-(def ^:private rf-for ^:rf-fn
-  (fn [rf env result bindings content]
-    (if (seq bindings)
-      (let [[k coll & next-bindings] bindings]
-        (reduce (fn [result val]
-                  (rf-for rf
-                          (assoc env k val)
-                          result
-                          next-bindings
-                          content))
-                result
-                (tpl-eval env coll)))
-      (reduce (partial rf-block rf env)
+(defn- rf-for [rf env result bindings content]
+  (if (seq bindings)
+    (let [[k coll & next-bindings] bindings]
+      (reduce (fn [result val]
+                (rf-for rf
+                        (assoc env k val)
+                        result
+                        next-bindings
+                        content))
               result
-              content))))
-
-(def ^:private rf-let ^:rf-fn
-  (fn [rf env result bindings content]
-    (let [env (reduce (fn [env [symb val]]
-                        (assoc env symb (tpl-eval env val)))
-                      env
-                      (partition 2 bindings))]
-      (reduce (partial rf-block rf env)
-              result
-              content))))
-
-(def ^:private rf-if ^:rf-fn
-  (fn ([rf env result cond then]
-       (rf-if rf env result cond then nil))
-      ([rf env result cond then else]
-       (reduce (partial rf-block rf env)
-               result
-               (if (tpl-eval env cond) then else)))))
-
-(def ^:private rf-quote ^:rf-fn
-  (fn [rf env result content]
-    (rf result content)))
-
-;; Note: the separator is evaluated multiple times.
-;; Use a `let` if you need to reduce the performance impact.
-(def ^:private rf-interpose ^:rf-fn
-  (fn [rf env result separator content]
-    (reduce ((interpose separator)
-             (partial rf-block rf env))
+              (tpl-eval env coll)))
+    (reduce (partial rf-block rf env)
             result
             content)))
 
-(def default-env
-  {;; Block functions
-   'for rf-for
-   'let rf-let
-   'if  rf-if
-   'quote rf-quote
+(defn- rf-let [rf env result bindings content]
+  (let [env (reduce (fn [env [symb val]]
+                      (assoc env symb (tpl-eval env val)))
+                    env
+                    (partition 2 bindings))]
+    (reduce (partial rf-block rf env)
+            result
+            content)))
 
-   ;; Block functions based on transducers
-   'interpose rf-interpose
+(defn- rf-if
+  ([rf env result cond then]
+   (rf-if rf env result cond then nil))
+  ([rf env result cond then else]
+   (reduce (partial rf-block rf env)
+           result
+           (if (tpl-eval env cond) then else))))
+
+(defn- rf-quote [rf env result content]
+  (rf result content))
+
+;; Note: the separator is evaluated multiple times.
+;; Use a `let` if you need to reduce the performance impact.
+(defn- rf-interpose [rf env result separator content]
+  (reduce ((interpose separator)
+           (partial rf-block rf env))
+          result
+          content))
+
+(defn- inline-if
+  ([f-eval cond then] (inline-if f-eval cond then nil))
+  ([f-eval cond then else] (if (f-eval cond) (f-eval then) (f-eval else))))
+
+(defn- inline-quote [f-eval val]
+  val)
+
+(def default-env
+  {;; Block-macro functions are reducer functions which get their args unevaluated.
+   :hopen/block-macro
+   {'for   rf-for
+    'let   rf-let
+    'if    rf-if
+    'quote rf-quote
+
+    ;; Based on transducers
+    'interpose rf-interpose}
+
+   ;; The inline-macro functions get their args unevaluated.
+   :hopen/inline-macro
+   {'if    inline-if
+    'quote inline-quote}
 
    ;; Inline functions
    'get-in get-in
@@ -94,6 +105,13 @@
    '*     *
    '/     /
    'mod   mod
+
+   '<    <
+   '<=   <=
+   '>    >
+   '>=   >=
+   '=    =
+   'not= not=
 
    'str   str
    'join  str/join

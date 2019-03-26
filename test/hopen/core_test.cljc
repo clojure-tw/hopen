@@ -23,13 +23,20 @@
         ['(get-in captain [:name])]  ["Captain"]
         ['hopen/ctx]                 [{:foo 'bar}]
         ['(hopen/ctx :foo)]          ['bar]
+
+        ;; Block quote
         ['(quote a)]                 ['a]
+        [''a]                        ['a]
         ['(quote (a b c))]           ['(a b c)]
 
+        ;; Block if
         ['(if true  [1 2])]          [1 2]
         ['(if false [1 2])]          []
         ['(if true  [1 2] [3 4])]    [1 2]
         ['(if false [1 2] [3 4])]    [3 4]
+
+        ;; Inline if and inline quote
+        ['(+ 10 (if (= (hopen/ctx :foo) 'bar) 2 3))] [12]
 
         ['(let [a 3 b (square a)]
             [a b a b])]
