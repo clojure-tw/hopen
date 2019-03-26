@@ -83,6 +83,32 @@
         ;; Inline if and inline quote
         ['(+ 10 (if (= (hopen/ctx :foo) 'bar) 2 3))] [12]
 
+        ;; Block cond
+        [:x '(cond
+               (= (+ 2 2) 4) [:a :b]
+               (= (+ 2 2) 4) [:c :d]
+               :else [:something :else]) :y]
+        [:x :a :b :y]
+
+        [:x '(cond
+               (not= (+ 2 2) 4) [:a :b]
+               (= (+ 2 2) 4) [:c :d]
+               :else [:something :else]) :y]
+        [:x :c :d :y]
+
+        [:x '(cond
+               (not= (+ 2 2) 4) [:a :b]
+               (not= (+ 2 2) 4) [:c :d]
+               :else [:something :else]) :y]
+        [:x :something :else :y]
+
+        ;; Inline cond
+        [:x '(inline (cond
+                       (not= (+ 2 2) 4) [:a :b]
+                       (= (+ 2 2) 4) [:c :d]
+                       :else [:something :else])) :y]
+        [:x [:c :d] :y]
+
         ;; Block let
         ['(b/let [a 3 b (square a)]
             [a b a b])]
