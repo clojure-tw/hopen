@@ -7,9 +7,9 @@
 (deftest renderer-test
 
   (testing "basic testing"
-    (let [env (merge default-env
-                     {'square (fn [x] (* x x))
-                      'captain {:name "Captain", :age 41}})
+    (let [env (update default-env :bindings assoc
+                'square (fn [x] (* x x))
+                'captain {:name "Captain", :age 41})
           data {:foo 'bar}]
       (are [template output]
         (= (into [] (renderer template env) [data])
@@ -57,32 +57,34 @@
          :sep1 :sep2
          :y])))
 
- (testing "getters"
-    (let [data {:name "Alice"
-                :person [{:name "Leonard"}
-                         {:name "Albert"}]}
-          template '["hello "
-                     (hopen/ctx :name)
-                     " and "
-                     (get-in hopen/ctx [:person 1 :name])]]
-      (is (= (into []
-                   (renderer template)
-                   [data])
-             ["hello "
-              "Alice"
-              " and "
-              "Albert"]))))
+  (testing "getters"
+     (let [data {:name "Alice"
+                 :person [{:name "Leonard"}
+                          {:name "Albert"}]}
+           template '["hello "
+                      (hopen/ctx :name)
+                      " and "
+                      (get-in hopen/ctx [:person 1 :name])]]
+       (is (= (into []
+                    (renderer template)
+                    [data])
+              ["hello "
+               "Alice"
+               " and "
+               "Albert"]))))
 
   (testing "functions"
-    (let [data {:n 3}
+    (let [env (update default-env :bindings assoc
+                      'square (fn [x] (* x x))
+                      'captain {:name "Captain", :age 41})
           template '[(hopen/ctx :n)
                      " * "
                      (hopen/ctx :n)
                      " = "
                      (square (hopen/ctx :n))]
-          fns {'square (fn [x] (* x x))}]
+          data {:n 3}]
       (is (= (into []
-                   (renderer template fns)
+                   (renderer template env)
                    [data])
              [3
               " * "
@@ -91,11 +93,7 @@
               9]))))
 
   (testing "bindings"
-    (let [data {:name "Alice"
-                :person [{:name "Leonard"}
-                         {:name "Albert"
-                          :friend {:name "Eugenie"}}]}
-          template '["hello "
+    (let [template '["hello "
                      (let [person0 (get-in hopen/ctx [:person 0])
                            person1 (get-in hopen/ctx [:person 1])
                            person1-friend (person1 :friend)]
@@ -106,7 +104,11 @@
                            (person1-friend :name)
                            ") "
                            " and "
-                           (hopen/root :name)])]]
+                           (hopen/root :name)])]
+          data {:name "Alice"
+                :person [{:name "Leonard"}
+                         {:name "Albert"
+                          :friend {:name "Eugenie"}}]}]
       (is (= (into []
                    (renderer template)
                    [data])
@@ -121,13 +123,7 @@
               "Alice"]))))
 
   (testing "for loops"
-    (let [data {:boys [{:name "Albert"}
-                       {:name "Leonard"}]
-                :girls [{:name "Alice"}
-                        {:name "Eugenie"}]
-                :activities ["play SNES"
-                             "learn Clojure"]}
-          template '[(for [boy (hopen/ctx :boys)
+    (let [template '[(for [boy (hopen/ctx :boys)
                            girl (hopen/ctx :girls)
                            activity (hopen/ctx :activities)]
                           [(girl :name)
@@ -135,7 +131,13 @@
                            activity
                            " with "
                            (boy :name)
-                           :newline])]]
+                           :newline])]
+          data {:boys [{:name "Albert"}
+                       {:name "Leonard"}]
+                :girls [{:name "Alice"}
+                        {:name "Eugenie"}]
+                :activities ["play SNES"
+                             "learn Clojure"]}]
       (is (= (into []
                    (comp
                      (renderer template)

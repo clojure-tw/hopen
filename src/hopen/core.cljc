@@ -5,25 +5,25 @@
 (defn- tpl-eval [env element]
   (letfn [(f-eval [element]
            (cond
-            (symbol? element) (env element)
+            (symbol? element) (get-in env [:bindings element])
             (vector? element) (into [] (map f-eval) element)
             (set? element)    (into #{} (map f-eval) element)
             (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
             (list? element)   (let [[f-symb & args] element]
-                                (if-let [f (get-in env [:hopen/inline-macro f-symb])]
+                                (if-let [f (get-in env [:inline-macro f-symb])]
                                   (apply f f-eval args)
-                                  (if-let [f (env f-symb)]
+                                  (if-let [f (get-in env [:bindings f-symb])]
                                     (apply f (mapv f-eval args))
                                     (throw (#?(:clj  Exception.
                                                :cljs js/Error.)
-                                             (str "Function " f-symb "not found"))))))
+                                             (str "Function " f-symb " not found in env " env))))))
             :else element))]
    (f-eval element)))
 
 (defn- rf-block [rf env result element]
   (or (when (list? element)
         (let [[f-symb & args] element
-              f (get-in env [:hopen/block-macro f-symb])]
+              f (get-in env [:block-macro f-symb])]
           (when f
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
@@ -33,7 +33,7 @@
     (let [[k coll & next-bindings] bindings]
       (reduce (fn [result val]
                 (rf-for rf
-                        (assoc env k val)
+                        (update env :bindings assoc k val)
                         result
                         next-bindings
                         content))
@@ -45,7 +45,7 @@
 
 (defn- rf-let [rf env result bindings content]
   (let [env (reduce (fn [env [symb val]]
-                      (assoc env symb (tpl-eval env val)))
+                      (update env :bindings assoc symb (tpl-eval env val)))
                     env
                     (partition 2 bindings))]
     (reduce (partial rf-block rf env)
@@ -80,7 +80,7 @@
 
 (def default-env
   {;; Block-macro functions are reducer functions which get their args unevaluated.
-   :hopen/block-macro
+   :block-macro
    {'for   rf-for
     'let   rf-let
     'if    rf-if
@@ -90,33 +90,37 @@
     'interpose rf-interpose}
 
    ;; The inline-macro functions get their args unevaluated.
-   :hopen/inline-macro
+   :inline-macro
    {'if    inline-if
     'quote inline-quote}
 
-   ;; Inline functions
-   'get-in get-in
-   'range  range
+   ;; Contains:
+   ;; - the inline functions,
+   ;; - 'hopen/root, points to the root of the template's data, shall not be redefined.
+   ;; - 'hopen/ctx, also points to the template's data, can be locally redefined.
+   :bindings
+   {'get-in get-in
+    'range  range
 
-   'inc   inc
-   'dec   dec
-   '+     +
-   '-     -
-   '*     *
-   '/     /
-   'mod   mod
+    'inc inc
+    'dec dec
+    '+   +
+    '-   -
+    '*   *
+    '/   /
+    'mod mod
 
-   '<    <
-   '<=   <=
-   '>    >
-   '>=   >=
-   '=    =
-   'not= not=
+    '<    <
+    '<=   <=
+    '>    >
+    '>=   >=
+    '=    =
+    'not= not=
 
-   'str   str
-   'join  str/join
-   'upper str/upper-case
-   'lower str/lower-case})
+    'str   str
+    'join  str/join
+    'upper str/upper-case
+    'lower str/lower-case}})
 
 (defn renderer
   ([tpl] (renderer tpl default-env))
@@ -125,7 +129,7 @@
                  ([] (rf))
                  ([result] (rf result))
                  ([result input]
-                  (let [env (assoc env
+                  (let [env (update env :bindings assoc
                               'hopen/root input
                               'hopen/ctx input)]
                     (reduce (partial rf-block rf env)
