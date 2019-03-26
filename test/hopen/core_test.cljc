@@ -38,13 +38,22 @@
         ;; Inline if and inline quote
         ['(+ 10 (if (= (hopen/ctx :foo) 'bar) 2 3))] [12]
 
+        ;; Block let
         ['(let [a 3 b (square a)]
             [a b a b])]
         [3 9 3 9]
 
+        ;; Inline let
+        ['(inc (let [a 2 b 3] (+ a b)))] [6]
+
+        ;; Block for
         ['(for [a [:a :b :c] b (range 1 (+ 1 2))]
             [a b])]
         [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2]
+
+        ;; Inline for
+        ['(conj (for [a [:a :b :c] b (range 2)] [a b]) :x)]
+        [[[:a 0] [:a 1] [:b 0] [:b 1] [:c 0] [:c 1] :x]]
 
         ['(interpose ", " ["Alice" "Bernard" "Eugenie"])]
         ["Alice" ", " "Bernard" ", " "Eugenie"]

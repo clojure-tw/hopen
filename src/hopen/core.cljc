@@ -10,7 +10,7 @@
             (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
             (list? element)   (let [[f-symb & args] element]
                                 (if-let [f (get-in env [:inline-macro f-symb])]
-                                  (apply f f-eval args)
+                                  (apply f env args)
                                   (if-let [f (get-in env [:bindings f-symb])]
                                     (apply f (mapv f-eval args))
                                     (throw (#?(:clj  Exception.
@@ -70,11 +70,33 @@
           result
           content))
 
-(defn- inline-if
-  ([f-eval cond then] (inline-if f-eval cond then nil))
-  ([f-eval cond then else] (if (f-eval cond) (f-eval then) (f-eval else))))
+(defn- inline-for [env bindings content]
+  (letfn [(rf-for [rf env result bindings]
+            (if (seq bindings)
+              (let [[k coll & next-bindings] bindings]
+                (reduce (fn [result bound-val]
+                          (rf-for rf
+                                  (update env :bindings assoc k bound-val)
+                                  result
+                                  next-bindings))
+                        result
+                        (tpl-eval env coll)))
+              (rf result (tpl-eval env content))))]
+    (rf-for conj env '[] bindings)))
 
-(defn- inline-quote [f-eval val]
+(defn- inline-let [env bindings content]
+  (let [env (reduce (fn [env [symb bound-expr]]
+                      (update env :bindings assoc symb (tpl-eval env bound-expr)))
+                    env
+                    (partition 2 bindings))]
+    (tpl-eval env content)))
+
+(defn- inline-if
+  ([env cond then] (inline-if env cond then nil))
+  ([env cond then else]
+   (if (tpl-eval env cond) (tpl-eval env then) (tpl-eval env else))))
+
+(defn- inline-quote [env val]
   val)
 
 (def default-env
@@ -90,7 +112,9 @@
 
    ;; The inline-macro functions get their args unevaluated.
    :inline-macro
-   {'if    inline-if
+   {'for   inline-for
+    'let   inline-let
+    'if    inline-if
     'quote inline-quote}
 
    ;; Contains:
@@ -100,6 +124,11 @@
    :bindings
    {'get-in get-in
     'range  range
+
+    'first first
+    'last  last
+    'conj  conj
+    'pop   pop
 
     'inc inc
     'dec dec
