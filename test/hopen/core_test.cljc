@@ -24,6 +24,10 @@
         ['hopen/ctx]                 [{:foo 'bar}]
         ['(hopen/ctx :foo)]          ['bar]
 
+        ;; The "inline" function forces the interpreter into the inline mode.
+        [:a         '(if true [1 2] [3 4])  :z] [:a  1 2  :z]
+        [:a '(inline (if true [1 2] [3 4])) :z] [:a [1 2] :z]
+
         ;; Block quote
         ['(quote a)]                 ['a]
         [''a]                        ['a]

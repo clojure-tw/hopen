@@ -122,7 +122,8 @@
    ;; - 'hopen/root, points to the root of the template's data, shall not be redefined.
    ;; - 'hopen/ctx, also points to the template's data, can be locally redefined.
    :bindings
-   {'get-in get-in
+   {'inline identity
+    'get-in get-in
     'range  range
 
     'first first
