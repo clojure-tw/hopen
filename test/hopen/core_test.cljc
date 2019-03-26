@@ -53,6 +53,11 @@
         [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2]
 
         ['(for [a [:a :b :c] :join ["|"]
+                b (range 1 3)]
+            [a b])]
+        [:a 1 :a 2 "|" :b 1 :b 2 "|" :c 1 :c 2]
+
+        ['(for [a [:a :b :c] :join ["|"]
                 b (range 1 3) :join ["-"]]
             [a b])]
         [:a 1 "-" :a 2 "|" :b 1 "-" :b 2 "|" :c 1 "-" :c 2]
