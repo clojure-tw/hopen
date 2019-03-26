@@ -1,5 +1,4 @@
 (ns hopen.core
-  (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str]))
 
 (defn- tpl-eval [env element]

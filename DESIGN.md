@@ -2,26 +2,33 @@ This file contains some proposals for this project's design decisions.
 
 ## Different forms of templates
 
+If we wanted to make an analogy between this library and the JVM:
+- the text-based, user-facing templates are the JVM languages,
+- the "data template" format is the JVM byte code specification,
+- the template renderers are the JVM runtimes.
+
 ### User facing templates
 
-Text-based, described using one of the supported syntax, e.g.
+**Text-based**, they are described using one of the supported syntax, e.g.
 
-- `silly-j`, Hopen's default syntax.
-- Selmer's syntax.
+- Selmer's syntax, inspired from [Django](https://docs.djangoproject.com/en/dev/ref/templates/builtins/).
+- "Silly-j", a syntax designed to feel familiar to Clojure users.
+- Any other syntax that can be transformed into the "data template" format.
 
 ### Parsed template
- 
+
 > "It's just data"
 >
 > -- Rich Hickey
 
-It is designed to be read and processed, it could be written down
-into an EDN file and be loaded back later. This format is a standard
-for this library and it has a spec.
+Also known as the "data template", it is designed to be serialized into
+EDN format, to be read and processed by programs.
+
+This format is a standard for this library and it has a spec.
 
 Note: In the long run, this format has the potential to become a standard
 to represent parsed templates in the Clojure eco-system, so we *may* want
-to provide its spec as a separate project.
+to provide its spec as a separate project at some point.
 
 Example of parsed template in the EDN format:
 
@@ -29,81 +36,77 @@ Example of parsed template in the EDN format:
 [;; Some immediate values.
  "hello " :foo-kw bar-symb true 3
  
- ;; Access to the context's root.
- #get [root :name]
- #get-in [root [:persons 0 :name]]
- #collect [root [:persons [0 1 2] :name]]
+ ;; Referencing data.
+ (hopen/root :name)
+ (hopen/ctx :name)
+ (my-var :name)
  
- ;; Access to the current context.
- #get [ctx :name]
- #get-in [ctx [:persons 0 :name]]
- #collect [ctx [:persons [0 1 2] :name]]
+ (get-in my-var [:persons 0 :name])
+ (collect my-var [:persons [0 1 2] :name])
  
- ;; Scoped alteration of the current context.
- #let [[; Note: we can't bind the root symbol.
-        ctx  #get-in [ctx [:persons 0]]]
-       [#get [ctx :name]]]
+ ;; Scoped redefinition of the current context.
+ (let [hopen/ctx (get-in hopen/ctx [:persons 0])]
+    (hopen/ctx :name))
  
  ;; Scoped binding on an arbitrary symbol.
- #let [[person #get-in [ctx [:persons 0]]]
-       [#get [person :name]]]
+ (let [person (get-in hopen/ctx [:persons 0])]
+    (person :name))
  
  ;; Iterations, scoped binding on cartesian products.
- #for [[person #get [ctx :persons]]
-       [#get [person :name]]]
+ (for [person (hopen/ctx :persons)]
+    (person :name))
  
  ;; Conditional rendering.
- #if [#get [ctx :cond?]
-      [#get-in [ctx [:persons 0 :name]]]  ; then clause
-      [#get-in [ctx [:persons 1 :name]]]] ; else clause
+ (if (hopen/ctx :something)
+   (get-in hopen/ctx [:persons 0 :name])  ; then clause
+   (get-in hopen/ctx [:persons 1 :name])) ; else clause
  
- ;; Conditional rendering, level up.
- #case [#get [ctx :chosen-one]
-        [0 [#get-in [ctx [:persons 0 :name]]]
-         1 [#get-in [ctx [:persons 1 :name]]]
-         2 [#get-in [ctx [:persons 2 :name]]]
-         3 [#get-in [ctx [:persons 3 :name]]]
-         4 [#get-in [ctx [:persons 4 :name]]]]
-        "else clause"]
+ ;; This works as well inline.
+ (get-in hopen/ctx [:persons (if (hopen/ctx :something) 0 1) :name])
  
- ;; Filters
- #square [3]
+ ;; More conditional rendering.
+ (case (hopen/ctx :chosen-one)
+   0        nil
+   :the-one (get-in hopen/ctx [:persons 1 :name])
+   true     {:name "Trueman"}
+   "else clause")
  
+ ;; Helper functions.
+ (inc (hopen/ctx :index))
+ (upper (person :name))
+ 
+ ;; Helper functions can also be user-defined.
+ (sum-of-squares 3 4) ; {'sum-of-squares (fn [x y] (+ (* x x) (* y y)))}
  ]
 ```
 
-### Compiled template
+### Renderer
 
-As a Clojure transducer, this template form is optimized for rendering.
-It outputs a serie of printable data (e.g. numbers, strings, etc ..).
+This template form is optimized for rendering. How it is doing it and
+how it is used depends on the implementation.
 
-In addition to the default portable implementation of the
-template compiler, some environment specific implementations
-could be provided for better performance.
+Just like the JVM runtimes, there are some which are pure interpreters and some
+which optimize using Just-In-Time compilation techniques.
 
 ## Hopen's API
 
+Something like that:
+
 ```clojure
-(require '[hopen.core :as hopen]
+(require '[hopen.renderer.xf :as rxf]
          '[hopen.syntax.silly-j :as silly-j])
 
 ;; Parse a template using one of the supported syntax.
-(def parsed-template
+(def data-template
   (silly-j/parse "Hello {@:name}, {@:n} * {@:n} = {square @:n}"))
 
-;; Compile a template for rendering.
-(def template-xf
-  (hopen/compile parsed-template
-                 (assoc hopen/builtin-filters
+;; Prepare a template for rendering using one of the supported renderer.
+(def renderer
+  (rxf/renderer data-template
+                (update rxf/default-env :bindings assoc
                   'square (fn [x] (* x x)))))
 
-;; Render your data into a string.
-(transduce template-xf str [{:name "Alice", :n 3}])
+;; Use the renderer to output the data into a string.
+(transduce renderer str [{:name "Alice", :n 3}])
 ; => "Hello Alice, 3 * 3 = 9"
 ```
-
-# Implementation Requirements
-
-- The filter functions should be standard clojure functions,
-  they should be used in the same way by any of the different
-  template syntax available.
