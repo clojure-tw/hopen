@@ -27,20 +27,54 @@
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
 
-(defn- rf-for [rf env result bindings content]
-  (if (seq bindings)
-    (let [[k coll & next-bindings] bindings]
-      (reduce (fn [result val]
-                (rf-for rf
-                        (update env :bindings assoc k val)
-                        result
-                        next-bindings
-                        content))
-              result
-              (tpl-eval env coll)))
-    (reduce (partial rf-block rf env)
-            result
-            content)))
+
+(defn- parse-binding [bindings]
+  (let [[k coll & next-bindings] bindings
+        qualifiers (reduce (fn [qualifiers [k v]]
+                             (if-not (keyword? k)
+                               (reduced qualifiers)
+                               (assoc qualifiers k v)))
+                           {}
+                           (partition 2 next-bindings))]
+    [k coll qualifiers (drop (* 2 (count qualifiers)) next-bindings)]))
+
+(defn parse-bindings [bindings]
+  (loop [accum []
+         remaining bindings]
+    (if (empty? remaining)
+      accum
+      (let [[k coll qualifiers next-bindings :as single-binding] (parse-binding remaining)]
+        (recur (conj accum (butlast single-binding))
+               next-bindings)))))
+
+(defn- inter-reduce [rf-items rf-separators result coll]
+  (if (seq coll)
+    (reduce (fn [result item]
+              (-> result
+                  (rf-separators)
+                  (rf-items item)))
+            (rf-items result (first coll))
+            (next coll))
+    result))
+
+(defn- rf-for [rf env result bindings-seq content]
+  (letfn [(for-binding [env result bindings]
+            (if (seq bindings)
+              (let [[[symb coll {:keys [separated-by]}] & next-bindings] bindings]
+                (inter-reduce (fn [result val]
+                                  (for-binding (update env :bindings assoc symb val)
+                                               result
+                                               next-bindings))
+                              (fn [result]
+                                (reduce (partial rf-block rf env)
+                                        result
+                                        separated-by))
+                              result
+                              (tpl-eval env coll)))
+              (reduce (partial rf-block rf env)
+                      result
+                      content)))]
+    (for-binding env result (parse-bindings bindings-seq))))
 
 (defn- rf-let [rf env result bindings content]
   (let [env (reduce (fn [env [symb val]]

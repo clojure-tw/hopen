@@ -2,7 +2,22 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                                    :include-macros true])
-            [hopen.core :refer [renderer default-env]]))
+            [hopen.core :refer [renderer default-env parse-bindings]]))
+
+(deftest parse-bindings-test
+  (testing "Spec the function's input and output"
+    (are [input output]
+      (= (parse-bindings input) output)
+
+      (seq [])
+      []
+
+      (seq '[var0 val0 :foo foo-val :bar bar-val
+             var1 val1
+             var2 val2 :separated-by "|"])
+      '[[var0 val0 {:foo foo-val :bar bar-val}]
+        [var1 val1 {}]
+        [var2 val2 {:separated-by "|"}]])))
 
 (deftest renderer-test
 
@@ -51,9 +66,20 @@
         ['(inc (let [a 2 b 3] (+ a b)))] [6]
 
         ;; Block for
-        ['(for [a [:a :b :c] b (range 1 (+ 1 2))]
+        ['(for [a [:a :b :c]
+                b (range 1 3)]
             [a b])]
         [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2]
+
+        ['(for [a [:a :b :c] :separated-by ["|"]
+                b (range 1 3)]
+            [a b])]
+        [:a 1 :a 2 "|" :b 1 :b 2 "|" :c 1 :c 2]
+
+        ['(for [a [:a :b :c] :separated-by ["|"]
+                b (range 1 3) :separated-by ["-"]]
+            [a b])]
+        [:a 1 "-" :a 2 "|" :b 1 "-" :b 2 "|" :c 1 "-" :c 2]
 
         ;; Inline for
         ['(conj (for [a [:a :b :c] b (range 2)] [a b]) :x)]
