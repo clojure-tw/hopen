@@ -19,9 +19,11 @@
             :else element))]
    (f-eval element)))
 
-;; Top level evaluation functions
-;; The given element can be a "block" to be executed or an simple expression to be evaluated
-(defn- rf-block [rf env result element]
+(defn- rf-block
+  "Top level evaluation functions
+  The given element can be a `block` to be executed or an simple expression to be evaluated."
+  [rf env result element]
+
   (or (when (list? element)
         (let [[f-symb & args] element
               f (get-in env [:block-macro f-symb])
