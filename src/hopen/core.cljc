@@ -19,25 +19,70 @@
             :else element))]
    (f-eval element)))
 
+;; Top level evaluation functions
+;; The given element can be a "block" to be executed or an simple expression to be evaluated
 (defn- rf-block [rf env result element]
   (or (when (list? element)
         (let [[f-symb & args] element
-              f (get-in env [:block-macro f-symb])]
-          (when f
+              f (get-in env [:block-macro f-symb])
+
+              ;; Values in :block-macro could be a function or a var
+              ;; If it's a var, resolve it now (into a function).
+              ;; This allows us to frequently rebind/re-eval functions without
+              ;; having to reconstruct `default-env`
+              f (if-not (var? f)
+                  f
+                  (var-get f))]
+          (when (fn? f)
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
 
 (defn- rf-for [rf env result bindings content]
   (if (seq bindings)
-    (let [[k coll & next-bindings] bindings]
-      (reduce (fn [result val]
-                (rf-for rf
-                        (update env :bindings assoc k val)
-                        result
-                        next-bindings
-                        content))
-              result
-              (tpl-eval env coll)))
+    ;; Deconstruct one pair of the `for` binding
+    (let [[k coll & next-bindings] bindings
+
+          ;; Extract optional :separated-by clause and the separator itself
+          separator (when (= :separated-by (first next-bindings))
+                      (second next-bindings))
+          next-bindings (if-not separator
+                          next-bindings
+                          (drop 2 next-bindings))
+
+          ;; Evaluate the bound expression (into a collection) to be operate over
+          loop-operands (tpl-eval env coll)]
+
+      ;; Loop over the operands and build up the result
+      ;; Note that here, we're inside a transducer and `result` is actually mutated.
+      ;; So there is no difference between `result` and `next-result`.
+      ;; We keep the code structure as if we're dealing with immutable datastrcuture
+      ;; for the sake of clarity.
+      (loop [result result
+             remaining loop-operands]
+
+        (if (empty? remaining)
+          result
+
+          (let [;; Bind a new value to the symbol...
+                ;; Call `rf-for` recursively to deal with the rest of the bindings
+                next-result (rf-for rf
+                                    (update env :bindings assoc k (first remaining))
+                                    result
+                                    next-bindings
+                                    content)
+
+                ;; If a separator has been provided
+                ;; and we're not looking at the last item in the list,
+                ;; insert the separator now
+                next-result (if (and separator (not (empty? (rest remaining))))
+                              (apply rf next-result (tpl-eval env separator))
+                              next-result)]
+            (recur next-result
+                   (rest remaining))))))
+
+    ;; No more bindings to deal with.
+    ;; At this point, all required symbols should have been bound to a specific value
+    ;; We should be able to just evaluate the remaining content.
     (reduce (partial rf-block rf env)
             result
             content)))
@@ -85,10 +130,16 @@
     (rf-for conj env '[] bindings)))
 
 (defn- inline-let [env bindings content]
+  ;; Build a new env using the given bindings
   (let [env (reduce (fn [env [symb bound-expr]]
+                      ;; For each pair in the binding form...
+                      ;; Evaluate bound expression, then
+                      ;; Push the value into env with the correct symbol
                       (update env :bindings assoc symb (tpl-eval env bound-expr)))
                     env
                     (partition 2 bindings))]
+
+    ;; Continue evaluation with the new env
     (tpl-eval env content)))
 
 (defn- inline-if
@@ -99,6 +150,7 @@
 (defn- inline-quote [env val]
   val)
 
+;; An `env` maps an op in a template to its actual handler
 (def default-env
   {;; Block-macro functions are reducer functions which get their args unevaluated.
    :block-macro
@@ -150,8 +202,11 @@
     'upper str/upper-case
     'lower str/lower-case}})
 
+
 (defn renderer
   ([tpl] (renderer tpl default-env))
+
+  ;; `renderer` returns a transducer
   ([tpl env] (fn [rf]
                (fn
                  ([] (rf))
