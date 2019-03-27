@@ -4,6 +4,21 @@
                                    :include-macros true])
             [hopen.core :refer [renderer default-env]]))
 
+(deftest parse-bindings-test
+  (testing "Spec the function's input and output"
+    (are [input output]
+      (= (parse-bindings input) output)
+
+      (seq [])
+      []
+
+      (seq '[var0 val0 :foo foo-val :bar bar-val
+             var1 val1
+             var2 val2 :separated-by "|"])
+      '[[var0 val0 {:foo foo-val :bar bar-val}]
+        [var1 val1 nil]
+        [var2 val2 {:separated-by "|"}]])))
+
 (deftest renderer-test
 
   (testing "basic testing"
