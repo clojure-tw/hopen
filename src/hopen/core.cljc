@@ -33,7 +33,7 @@
   [rf]
   (let [state (volatile! [])]
     (fn
-      ([] [])
+      ([] (rf))
       ([result] (let [binding @state]
                   (rf (cond-> result
                         (seq binding) (rf binding)))))
