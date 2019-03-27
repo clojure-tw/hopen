@@ -2,12 +2,12 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                                    :include-macros true])
-            [hopen.core :refer [renderer default-env parse-bindings]]))
+            [hopen.core :refer [renderer default-env] :as hopen]))
 
 (deftest parse-bindings-test
   (testing "Spec the function's input and output"
     (are [input output]
-      (= (parse-bindings input) output)
+      (= (#'hopen/parse-bindings input) output)
 
       (seq [])
       []
@@ -16,7 +16,7 @@
              var1 val1
              var2 val2 :separated-by "|"])
       '[[var0 val0 {:foo foo-val :bar bar-val}]
-        [var1 val1 {}]
+        [var1 val1 nil]
         [var2 val2 {:separated-by "|"}]])))
 
 (deftest renderer-test

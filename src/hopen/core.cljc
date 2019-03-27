@@ -28,24 +28,33 @@
       (rf result (tpl-eval env element))))
 
 
-(defn- parse-binding [bindings]
-  (let [[k coll & next-bindings] bindings
-        qualifiers (reduce (fn [qualifiers [k v]]
-                             (if-not (keyword? k)
-                               (reduced qualifiers)
-                               (assoc qualifiers k v)))
-                           {}
-                           (partition 2 next-bindings))]
-    [k coll qualifiers (drop (* 2 (count qualifiers)) next-bindings)]))
+(defn- binding-partition
+  "A transducer which is partitioning a multi-variables binding sequence."
+  [rf]
+  (let [state (volatile! [])]
+    (fn
+      ([] [])
+      ([result] (let [binding @state]
+                  (rf (cond-> result
+                        (seq binding) (rf binding)))))
+      ([result input]
+       (let [binding @state
+             length (count binding)]
+         (if (and (even? length)
+                  (>= length 2)
+                  (not (keyword? input)))
+           (do (vreset! state [input])
+               (rf result binding))
+           (do (vswap! state conj input)
+               result)))))))
 
-(defn parse-bindings [bindings]
-  (loop [accum []
-         remaining bindings]
-    (if (empty? remaining)
-      accum
-      (let [[k coll qualifiers next-bindings :as single-binding] (parse-binding remaining)]
-        (recur (conj accum (butlast single-binding))
-               next-bindings)))))
+(defn- parse-bindings [bindings]
+  (into []
+        (comp binding-partition
+              (map (fn [binding]
+                     (let [[symb value & {:as options}] binding]
+                       [symb value options]))))
+        bindings))
 
 (defn- inter-reduce [rf-items rf-separators result coll]
   (if (seq coll)
