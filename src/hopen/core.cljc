@@ -37,17 +37,32 @@
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
 
+
+(defn- parse-binding [bindings]
+  (let [[k coll & next-bindings] bindings
+        qualifiers (reduce (fn [qualifiers [k v]]
+                             (if-not (keyword? k)
+                               (reduced qualifiers)
+                               (assoc qualifiers k v)))
+                           {}
+                           (partition 2 next-bindings))]
+    [k coll qualifiers (drop (* 2 (count qualifiers)) next-bindings)]))
+
+(defn parse-bindings [bindings]
+  (loop [accum []
+         remaining bindings]
+
+    (if (empty? remaining)
+      accum
+
+      (let [[k coll qualifiers next-bindings :as single-binding] (parse-binding remaining)]
+        (recur (conj accum (butlast single-binding))
+               next-bindings)))))
+
 (defn- rf-for [rf env result bindings content]
   (if (seq bindings)
     ;; Deconstruct one pair of the `for` binding
-    (let [[k coll & next-bindings] bindings
-
-          ;; Extract optional :separated-by clause and the separator itself
-          separator (when (= :separated-by (first next-bindings))
-                      (second next-bindings))
-          next-bindings (if-not separator
-                          next-bindings
-                          (drop 2 next-bindings))
+    (let [[k coll {separator :separated-by} next-bindings] (parse-binding bindings)
 
           ;; Evaluate the bound expression (into a collection) to be operate over
           loop-operands (tpl-eval env coll)]
