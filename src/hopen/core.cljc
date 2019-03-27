@@ -61,10 +61,10 @@
         (recur (conj accum (butlast single-binding))
                next-bindings)))))
 
-(defn- rf-for [rf env result bindings content]
-  (if (seq bindings)
+(defn- rf-for- [rf env result parsed-bindings content]
+  (if (seq parsed-bindings)
     ;; Deconstruct one pair of the `for` binding
-    (let [[k coll {separator :separated-by} next-bindings] (parse-binding bindings)
+    (let [[k coll {separator :separated-by}] (first parsed-bindings)
 
           ;; Evaluate the bound expression (into a collection) to be operate over
           loop-operands (tpl-eval env coll)]
@@ -82,11 +82,11 @@
 
           (let [;; Bind a new value to the symbol...
                 ;; Call `rf-for` recursively to deal with the rest of the bindings
-                next-result (rf-for rf
-                                    (update env :bindings assoc k (first remaining))
-                                    result
-                                    next-bindings
-                                    content)
+                next-result (rf-for- rf
+                                     (update env :bindings assoc k (first remaining))
+                                     result
+                                     (rest parsed-bindings)
+                                     content)
 
                 ;; If a separator has been provided
                 ;; and we're not looking at the last item in the list,
@@ -103,6 +103,9 @@
     (reduce (partial rf-block rf env)
             result
             content)))
+
+(defn rf-for [rf env result bindings content]
+  (rf-for- rf env result (parse-bindings bindings) content))
 
 (defn- rf-let [rf env result bindings content]
   (let [env (reduce (fn [env [symb val]]
