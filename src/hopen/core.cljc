@@ -3,20 +3,20 @@
 
 (defn- tpl-eval [env element]
   (letfn [(f-eval [element]
-           (cond
-            (symbol? element) (get-in env [:bindings element])
-            (vector? element) (into [] (map f-eval) element)
-            (set? element)    (into #{} (map f-eval) element)
-            (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
-            (list? element)   (let [[f-symb & args] element]
-                                (if-let [f (get-in env [:inline-macro f-symb])]
-                                  (apply f env args)
-                                  (if-let [f (get-in env [:bindings f-symb])]
-                                    (apply f (mapv f-eval args))
-                                    (throw (#?(:clj  Exception.
-                                               :cljs js/Error.)
-                                             (str "Function " f-symb " not found in env " env))))))
-            :else element))]
+            (cond
+              (symbol? element) (get-in env [:bindings element])
+              (vector? element) (into [] (map f-eval) element)
+              (set? element)    (into #{} (map f-eval) element)
+              (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
+              (list? element)   (let [[f-symb & args] element]
+                                  (if-let [f (get-in env [:inline-macro f-symb])]
+                                    (apply f env args)
+                                    (if-let [f (get-in env [:bindings f-symb])]
+                                      (apply f (mapv f-eval args))
+                                      (throw (#?(:clj  Exception.
+                                                 :cljs js/Error.)
+                                               (str "Function " f-symb " not found in env " env))))))
+             :else element))]
    (f-eval element)))
 
 (defn- rf-block [rf env result element]
@@ -26,7 +26,6 @@
           (when f
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
-
 
 (defn- binding-partition
   "A transducer which is partitioning a multi-variables binding sequence."
