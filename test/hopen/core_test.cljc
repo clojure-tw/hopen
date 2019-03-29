@@ -39,9 +39,10 @@
         ['hopen/ctx]                 [{:foo 'bar}]
         ['(hopen/ctx :foo)]          ['bar]
 
-        ;; Block quote
+        ;; Block and inline quote
         ['(quote a)]                 ['a]
         ['(quote (a b c))]           ['(a b c)]
+        ['(b/quote (a b c))]         ['a 'b 'c]
 
         ;; Block if
         ['(b/if true  [1 2])]          [1 2]

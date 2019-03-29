@@ -102,7 +102,7 @@
            (if (tpl-eval env cond) then else))))
 
 (defn- rf-quote [rf env result content]
-  (rf result content))
+  (reduce rf result content))
 
 ;; Note: the separator is evaluated multiple times.
 ;; Use a `let` if you need to reduce the performance impact.
@@ -164,8 +164,7 @@
    ;; - 'hopen/root, points to the root of the template's data, shall not be redefined.
    ;; - 'hopen/ctx, also points to the template's data, can be locally redefined.
    :bindings
-   {'inline identity
-    'get-in get-in
+   {'get-in get-in
     'range  range
 
     'first first
