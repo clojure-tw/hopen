@@ -39,26 +39,21 @@
         ['hopen/ctx]                 [{:foo 'bar}]
         ['(hopen/ctx :foo)]          ['bar]
 
-        ;; The "inline" function forces the interpreter into the inline mode.
-        [:a         '(if true [1 2] [3 4])  :z] [:a  1 2  :z]
-        [:a '(inline (if true [1 2] [3 4])) :z] [:a [1 2] :z]
-
         ;; Block quote
         ['(quote a)]                 ['a]
-        [''a]                        ['a]
         ['(quote (a b c))]           ['(a b c)]
 
         ;; Block if
-        ['(if true  [1 2])]          [1 2]
-        ['(if false [1 2])]          []
-        ['(if true  [1 2] [3 4])]    [1 2]
-        ['(if false [1 2] [3 4])]    [3 4]
+        ['(b/if true  [1 2])]          [1 2]
+        ['(b/if false [1 2])]          []
+        ['(b/if true  [1 2] [3 4])]    [1 2]
+        ['(b/if false [1 2] [3 4])]    [3 4]
 
         ;; Inline if and inline quote
         ['(+ 10 (if (= (hopen/ctx :foo) 'bar) 2 3))] [12]
 
         ;; Block let
-        ['(let [a 3 b (square a)]
+        ['(b/let [a 3 b (square a)]
             [a b a b])]
         [3 9 3 9]
 
@@ -66,18 +61,18 @@
         ['(inc (let [a 2 b 3] (+ a b)))] [6]
 
         ;; Block for
-        ['(for [a [:a :b :c]
-                b (range 1 3)]
+        ['(b/for [a [:a :b :c]
+                  b (range 1 3)]
             [a b])]
         [:a 1 :a 2 :b 1 :b 2 :c 1 :c 2]
 
-        ['(for [a [:a :b :c] :separated-by ["|"]
-                b (range 1 3)]
+        ['(b/for [a [:a :b :c] :separated-by ["|"]
+                  b (range 1 3)]
             [a b])]
         [:a 1 :a 2 "|" :b 1 :b 2 "|" :c 1 :c 2]
 
-        ['(for [a [:a :b :c] :separated-by ["|"]
-                b (range 1 3) :separated-by ["-"]]
+        ['(b/for [a [:a :b :c] :separated-by ["|"]
+                  b (range 1 3) :separated-by ["-"]]
             [a b])]
         [:a 1 "-" :a 2 "|" :b 1 "-" :b 2 "|" :c 1 "-" :c 2]
 
@@ -85,11 +80,11 @@
         ['(conj (for [a [:a :b :c] b (range 2)] [a b]) :x)]
         [[[:a 0] [:a 1] [:b 0] [:b 1] [:c 0] [:c 1] :x]]
 
-        ['(interpose ", " ["Alice" "Bernard" "Eugenie"])]
+        ['(b/interpose ", " ["Alice" "Bernard" "Eugenie"])]
         ["Alice" ", " "Bernard" ", " "Eugenie"]
 
-        ['(interpose (for [v [:sep1 :sep2]] [v])
-                     [:x (for [a [:a :b] b [1 2]] [a b]) :y])]
+        ['(b/interpose (b/for [v [:sep1 :sep2]] [v])
+                       [:x (b/for [a [:a :b] b [1 2]] [a b]) :y])]
         [:x
          :sep1 :sep2
          :a 1 :a 2 :b 1 :b 2
@@ -133,17 +128,17 @@
 
   (testing "bindings"
     (let [template '["hello "
-                     (let [person0 (get-in hopen/ctx [:person 0])
-                           person1 (get-in hopen/ctx [:person 1])
-                           person1-friend (person1 :friend)]
-                          [(person0 :name)
-                           ", "
-                           (person1 :name)
-                           " (whose friend is "
-                           (person1-friend :name)
-                           ") "
-                           " and "
-                           (hopen/root :name)])]
+                     (b/let [person0 (get-in hopen/ctx [:person 0])
+                             person1 (get-in hopen/ctx [:person 1])
+                             person1-friend (person1 :friend)]
+                       [(person0 :name)
+                        ", "
+                        (person1 :name)
+                        " (whose friend is "
+                        (person1-friend :name)
+                        ") "
+                        " and "
+                        (hopen/root :name)])]
           data {:name "Alice"
                 :person [{:name "Leonard"}
                          {:name "Albert"
@@ -162,15 +157,15 @@
               "Alice"]))))
 
   (testing "for loops"
-    (let [template '[(for [boy (hopen/ctx :boys)
-                           girl (hopen/ctx :girls)
-                           activity (hopen/ctx :activities)]
-                          [(girl :name)
-                           " "
-                           activity
-                           " with "
-                           (boy :name)
-                           :newline])]
+    (let [template '[(b/for [boy (hopen/ctx :boys)
+                             girl (hopen/ctx :girls)
+                             activity (hopen/ctx :activities)]
+                       [(girl :name)
+                        " "
+                        activity
+                        " with "
+                        (boy :name)
+                        :newline])]
           data {:boys [{:name "Albert"}
                        {:name "Leonard"}]
                 :girls [{:name "Alice"}

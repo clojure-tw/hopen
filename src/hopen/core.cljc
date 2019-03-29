@@ -144,13 +144,13 @@
 (def default-env
   {;; Block-macro functions are reducer functions which get their args unevaluated.
    :block-macro
-   {'for   rf-for
-    'let   rf-let
-    'if    rf-if
-    'quote rf-quote
+   {'b/for   rf-for
+    'b/let   rf-let
+    'b/if    rf-if
+    'b/quote rf-quote
 
     ;; Based on transducers
-    'interpose rf-interpose}
+    'b/interpose rf-interpose}
 
    ;; The inline-macro functions get their args unevaluated.
    :inline-macro
