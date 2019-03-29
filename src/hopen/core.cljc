@@ -101,9 +101,6 @@
            result
            (if (tpl-eval env cond) then else))))
 
-(defn- rf-quote [rf env result content]
-  (reduce rf result content))
-
 ;; Note: the separator is evaluated multiple times.
 ;; Use a `let` if you need to reduce the performance impact.
 (defn- rf-interpose [rf env result separator content]
@@ -147,7 +144,6 @@
    {'b/for   rf-for
     'b/let   rf-let
     'b/if    rf-if
-    'b/quote rf-quote
 
     ;; Based on transducers
     'b/interpose rf-interpose}
