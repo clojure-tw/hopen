@@ -55,6 +55,18 @@
                        [symb value options]))))
         bindings))
 
+(defn- collect [data keys]
+  (into [] (keep #(get data %) keys)))
+
+(defn- collect-in [data path]
+  (when (seq path)
+    (reduce (fn [coll keys]
+              (into []
+                    (mapcat (fn [item] (collect item keys)))
+                    coll))
+            [data]
+            path)))
+
 (defn- inter-reduce [rf-items rf-separators result coll]
   (if (seq coll)
     (reduce (fn [result item]

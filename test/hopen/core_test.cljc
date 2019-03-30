@@ -27,19 +27,20 @@
       nil              [:a :c :d]  []
 
       {:a 1 :b 2 :c 3} []          []
-      {:a 1 :b 2 :c 3} [:a :c :d]) [1 3]
+      {:a 1 :b 2 :c 3} [:a :c :d] [1 3]
 
       [:a :b :c :d]    []          []
-      [:a :b :c :d]    [0 2 7]     [:a :c]))
+      [:a :b :c :d]    [0 2 7]     [:a :c])))
 
 (deftest collect-in-test
   (testing "Example-spec the function's input and output"
     (are [data path output]
       (= (#'hopen/collect-in data path) output)
 
-      nil        [0 2 7] []
+      nil        [[0 2 7]] []
 
-      [:a :b :c] []      []
+      [:a :b :c] [[]]      []
+      [:a :b :c] []        nil
 
       [{:a 1    :b 2    :c 3}
        {:a 10   :b 20   :c 30}
