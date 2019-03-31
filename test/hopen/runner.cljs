@@ -3,4 +3,5 @@
              [doo.runner :refer-macros [doo-all-tests doo-tests]]
              [hopen.core-test]))
 
-(doo-tests 'hopen.core-test)
+(doo-tests 'hopen.renderer.xf-test
+           'hopen.util-test)
