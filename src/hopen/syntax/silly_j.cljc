@@ -2,6 +2,8 @@
   (:require [hopen.renderer.xf :as rxf]
             [instaparse.core :as insta]))
 
+(declare parse)
+
 ;; TODO test case
 (defn render
   ([template data]
