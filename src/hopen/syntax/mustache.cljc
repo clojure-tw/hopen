@@ -1,6 +1,7 @@
 (ns hopen.syntax.mustache
   #?(:clj (:import [java.util.regex Pattern]))
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [hopen.syntax.util :as util]))
 
 ;;------------------------------------------------------------------------------
 ;; General utilities
@@ -31,13 +32,12 @@
 ;; Namespace specific functions
 ;;------------------------------------------------------------------------------
 
-;; TODO!!! Provide a js implementation
 (defn- compile-regex [start-delim end-delim]
-  (Pattern/compile
+  (re-pattern
    (str
-    (Pattern/quote start-delim)
+    (util/re-quote start-delim)
     "(.*)"
-    (Pattern/quote end-delim))))
+    (util/re-quote end-delim))))
 
 (defn- parse-delim-change-tag
   "Try to parse the tag-text as a delimiter change command.
