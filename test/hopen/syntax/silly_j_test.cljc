@@ -9,7 +9,7 @@
     (are [template parsed]
         (= (parse template)
            parsed)
-      ;; Split string and contax
+      ;; Split string and context
         "Hello {@:name}, {@:n} * {@:n} = {square @:n}"                ["Hello "
                                                                        '(hopen/ctx :name)
                                                                        ", "
