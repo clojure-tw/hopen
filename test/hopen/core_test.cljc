@@ -84,29 +84,35 @@
         ['(+ 10 (if (= (hopen/ctx :foo) 'bar) 2 3))] [12]
 
         ;; Block cond
-        [:x '(cond
+        [:x '(b/cond) :y]
+        [:x :y]
+
+        [:x '(b/cond
                (= (+ 2 2) 4) [:a :b]
                (= (+ 2 2) 4) [:c :d]
                :else [:something :else]) :y]
         [:x :a :b :y]
 
-        [:x '(cond
+        [:x '(b/cond
                (not= (+ 2 2) 4) [:a :b]
                (= (+ 2 2) 4) [:c :d]
                :else [:something :else]) :y]
         [:x :c :d :y]
 
-        [:x '(cond
+        [:x '(b/cond
                (not= (+ 2 2) 4) [:a :b]
                (not= (+ 2 2) 4) [:c :d]
                :else [:something :else]) :y]
         [:x :something :else :y]
 
         ;; Inline cond
-        [:x '(inline (cond
-                       (not= (+ 2 2) 4) [:a :b]
-                       (= (+ 2 2) 4) [:c :d]
-                       :else [:something :else])) :y]
+        [:x '(cond) :y]
+        [:x nil :y]
+
+        [:x '(cond
+               (not= (+ 2 2) 4) [:a :b]
+               (= (+ 2 2) 4) [:c :d]
+              :else [:something :else]) :y]
         [:x [:c :d] :y]
 
         ;; Block let

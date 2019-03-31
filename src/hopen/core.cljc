@@ -113,6 +113,15 @@
            result
            (if (tpl-eval env cond) then else))))
 
+(defn- rf-cond [rf env result & clauses]
+  (reduce (partial rf-block rf env)
+          result
+          (reduce (fn [_ [cond then]]
+                    (when (tpl-eval env cond)
+                      (reduced then)))
+                  nil
+                  (partition 2 clauses))))
+
 ;; Note: the separator is evaluated multiple times.
 ;; Use a `let` if you need to reduce the performance impact.
 (defn- rf-interpose [rf env result separator content]
@@ -147,6 +156,13 @@
   ([env cond then else]
    (if (tpl-eval env cond) (tpl-eval env then) (tpl-eval env else))))
 
+(defn- inline-cond [env & clauses]
+  (reduce (fn [_ [cond then]]
+            (when (tpl-eval env cond)
+              (reduced (tpl-eval env then))))
+          nil
+          (partition 2 clauses)))
+
 (defn- inline-quote [env val]
   val)
 
@@ -156,6 +172,7 @@
    {'b/for   rf-for
     'b/let   rf-let
     'b/if    rf-if
+    'b/cond  rf-cond
 
     ;; Based on transducers
     'b/interpose rf-interpose}
@@ -165,6 +182,7 @@
    {'for   inline-for
     'let   inline-let
     'if    inline-if
+    'cond  inline-cond
     'quote inline-quote}
 
    ;; Contains:
