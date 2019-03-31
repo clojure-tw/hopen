@@ -151,14 +151,35 @@
    ;; - 'hopen/root, points to the root of the template's data, shall not be redefined.
    ;; - 'hopen/ctx, also points to the template's data, can be locally redefined.
    :bindings
-   {'get-in get-in
-    'range  range
+   {;; Get things
+    'get        get
+    'get-in     get-in
+    'collect    util/collect
+    'collect-in util/collect-in
+    'first      first
+    'next       next
+    'last       last
+    'pop        pop
+    'count      count
 
-    'first first
-    'last  last
-    'conj  conj
-    'pop   pop
+    ;; Alter collections
+    'cons   cons
+    'conj   conj
+    'assoc  assoc
+    'dissoc dissoc
 
+    ;; Build sequences
+    'take          take
+    'drop          drop
+    'map           map
+    'comp          comp
+    'range         range
+    'cycle         cycle
+    'constantly    constantly
+    'partition     partition
+    'partition-all partition-all
+
+    ;; Some maths
     'inc inc
     'dec dec
     '+   +
@@ -167,15 +188,21 @@
     '/   /
     'mod mod
 
-    '<    <
-    '<=   <=
-    '>    >
-    '>=   >=
-    '=    =
-    'not= not=
+    ;; Compare numbers
+    '<     <
+    '<=    <=
+    '>     >
+    '>=    >=
+    '=     =
+    'not=  not=
+    'neg?  neg?
+    'zero? zero?
+    'pos?  pos?
 
+    ;; Text transformations
     'str   str
     'join  str/join
+    'cap   str/capitalize
     'upper str/upper-case
     'lower str/lower-case}})
 
