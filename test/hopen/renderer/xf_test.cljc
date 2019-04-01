@@ -204,4 +204,43 @@
               "Alice play SNES with Leonard"
               "Alice learn Clojure with Leonard"
               "Eugenie play SNES with Leonard"
-              "Eugenie learn Clojure with Leonard"])))))
+              "Eugenie learn Clojure with Leonard"]))))
+
+  (testing "inner templates"
+    (let [template '["Person list:\n"
+                     (b/for [person (hopen/ctx :persons)]
+                       ["- " (b/template :person person) "\n"])]
+          person-template '["name: " (hopen/ctx :name) ", "
+                            "age: " (hopen/ctx :age)]
+          data {:persons [{:name "Alice", :age 25}
+                          {:name "Leonard", :age 23}]}
+          env (update default-env :templates assoc
+                      :person person-template)]
+      (is (= (into []
+                   (renderer template env)
+                   [data])
+             ["Person list:\n"
+              "- " "name: " "Alice" ", " "age: " 25 "\n"
+              "- " "name: " "Leonard" ", " "age: " 23 "\n"]))))
+
+  (testing "inner templates, parent-root"
+    (let [root-template '["My root data is " hopen/root
+                          " and my parent's root data is " hopen/parent-root ".\n"
+                          "Inner-template:\n"
+                          (b/template :inner-tpl (hopen/ctx :inner))]
+          inner-template '["My root data is " hopen/root
+                           " and my parent's root data is " hopen/parent-root ".\n"]
+          data {:whoami :da-root
+                :inner {:whoami :da-inner}}
+          env (update default-env :templates assoc
+                      :inner-tpl inner-template)]
+      (is (= (into []
+                   (renderer root-template env)
+                   [data])
+             ["My root data is " {:whoami :da-root
+                                  :inner {:whoami :da-inner}}
+              " and my parent's root data is " nil ".\n"
+              "Inner-template:\n"
+              "My root data is " {:whoami :da-inner}
+              " and my parent's root data is " {:whoami :da-root
+                                                :inner {:whoami :da-inner}} ".\n"])))))

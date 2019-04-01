@@ -83,6 +83,24 @@
                   nil
                   (partition 2 clauses))))
 
+(defn- rf-template
+  ([rf env result template-key]
+   (rf-template rf env result template-key 'hopen/ctx))
+  ([rf env result template-key-expr data-expr]
+   (let [template-key (tpl-eval env template-key-expr)
+         data (tpl-eval env data-expr)
+         inner-env (update env :bindings assoc
+                           'hopen/parent-root (get (:bindings env) 'hopen/root)
+                           'hopen/root data
+                           'hopen/ctx data)]
+     (if-let [template (get (:templates env) template-key)]
+       (reduce (partial rf-block rf inner-env)
+               result
+               template)
+       (throw (#?(:clj  Exception.
+                  :cljs js/Error.)
+                (str "Template " template-key " not found in env " env)))))))
+
 ;; Note: the separator is evaluated multiple times.
 ;; Use a `let` if you need to reduce the performance impact.
 (defn- rf-interpose [rf env result separator content]
@@ -128,12 +146,16 @@
   val)
 
 (def default-env
-  {;; Block-macro functions are reducer functions which get their args unevaluated.
+  {;; The templates accessible inside the current template.
+   :templates {}
+
+   ;; Block-macro functions are reducer functions which get their args unevaluated.
    :block-macro
-   {'b/for   rf-for
-    'b/let   rf-let
-    'b/if    rf-if
-    'b/cond  rf-cond
+   {'b/for      rf-for
+    'b/let      rf-let
+    'b/if       rf-if
+    'b/cond     rf-cond
+    'b/template rf-template
 
     ;; Based on transducers
     'b/interpose rf-interpose}
