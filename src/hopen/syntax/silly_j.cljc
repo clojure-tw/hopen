@@ -42,8 +42,8 @@
         :FCTX (fn [at comma attr]
                 (list 'hopen/ctx (keyword attr)))
         :SPC identity
-        :FN (fn [fn & applies]
-              (cons (symbol fn)
+        :FN (fn [first-elm & applies]
+              (cons (symbol first-elm)
                     (filter #(not= " " %) applies)
                     ))
         :APPLIES identity
