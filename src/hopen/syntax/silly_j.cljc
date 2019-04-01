@@ -35,7 +35,6 @@
   (->> (ebnf msg)
       (insta/transform
        {:STR str
-        ;; :FCTX 'hopen/ctx
         :APPLY str
         :FNNAME str
         :ATTR str
@@ -44,11 +43,9 @@
         :SPC identity
         :FN (fn [first-elm & applies]
               (cons (symbol first-elm)
-                    (filter #(not= " " %) applies)
-                    ))
+                    (remove #{" "} applies)))
         :APPLIES identity
         :SILLY identity
-        :SILLYSTR (fn [obrk silly cbrk]
-                    silly)
+        :SILLYSTR (fn [obrk silly cbrk] silly)
         :S list
         })))
