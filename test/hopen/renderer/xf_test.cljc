@@ -4,6 +4,24 @@
                                    :include-macros true])
             [hopen.renderer.xf :refer [renderer default-env]]))
 
+(deftest seq?-test
+  (testing "Check if those assumptions are consistent across all the platforms."
+    (are [data]
+      (seq? data)
+
+      (list 1 2 3)
+      (cons 1 (list 2 3))
+      '(1 2 3)
+      `(1 2 3))
+
+    (are [data]
+      (not (seq? data))
+
+      "1 2 3"
+      [1 2 3]
+      {1 2 3 4}
+      #{1 2 3 4})))
+
 (deftest renderer-test
 
   (testing "basic testing"

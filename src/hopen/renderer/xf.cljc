@@ -2,10 +2,6 @@
   (:require [clojure.string :as str]
             [hopen.util :as util]))
 
-(defn- can-eval? [element]
-  (or (list? element)
-      (= clojure.lang.Cons (type element))))
-
 (defn- tpl-eval [env element]
   (letfn [(f-eval [element]
             (cond
@@ -13,7 +9,7 @@
               (vector? element) (into [] (map f-eval) element)
               (set? element)    (into #{} (map f-eval) element)
               (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
-              (can-eval? element)   (let [[f-symb & args] element]
+              (seq? element)    (let [[f-symb & args] element]
                                   (if-let [f (get-in env [:inline-macro f-symb])]
                                     (apply f env args)
                                     (if-let [f (get-in env [:bindings f-symb])]
@@ -25,7 +21,7 @@
    (f-eval element)))
 
 (defn- rf-block [rf env result element]
-  (or (when (can-eval? element)
+  (or (when (seq? element)
         (let [[f-symb & args] element
               f (get-in env [:block-macro f-symb])]
           (when f
