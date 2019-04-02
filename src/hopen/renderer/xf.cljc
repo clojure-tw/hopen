@@ -2,6 +2,10 @@
   (:require [clojure.string :as str]
             [hopen.util :as util]))
 
+(defn- can-eval? [element]
+  (or (list? element)
+      (= clojure.lang.Cons (type element))))
+
 (defn- tpl-eval [env element]
   (letfn [(f-eval [element]
             (cond
@@ -9,7 +13,7 @@
               (vector? element) (into [] (map f-eval) element)
               (set? element)    (into #{} (map f-eval) element)
               (map? element)    (into {} (map (fn [[k v]] [(f-eval k) (f-eval v)])) element)
-              (list? element)   (let [[f-symb & args] element]
+              (can-eval? element)   (let [[f-symb & args] element]
                                   (if-let [f (get-in env [:inline-macro f-symb])]
                                     (apply f env args)
                                     (if-let [f (get-in env [:bindings f-symb])]
@@ -21,7 +25,7 @@
    (f-eval element)))
 
 (defn- rf-block [rf env result element]
-  (or (when (list? element)
+  (or (when (can-eval? element)
         (let [[f-symb & args] element
               f (get-in env [:block-macro f-symb])]
           (when f
@@ -127,6 +131,11 @@
 (defn- inline-quote [env val]
   val)
 
+(defn- ctx-lookup
+  "Tries to look up a field name in every context starting from most nested context first."
+  [env field-name]
+  (some #(get % (keyword field-name)) (reverse (get-in env [:bindings 'hopen/ctx] []))))
+
 (def default-env
   {;; Block-macro functions are reducer functions which get their args unevaluated.
    :block-macro
@@ -144,7 +153,9 @@
     'let   inline-let
     'if    inline-if
     'cond  inline-cond
-    'quote inline-quote}
+    'quote inline-quote
+
+    'ctx-lookup ctx-lookup}
 
    ;; Contains:
    ;; - the inline functions,

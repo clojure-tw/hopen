@@ -1,7 +1,9 @@
 (ns hopen.syntax.mustache
   #?(:clj (:import [java.util.regex Pattern]))
   (:require [clojure.string :as str]
-            [hopen.syntax.util :as util]))
+            [hopen.syntax.util :as util]
+            [clojure.zip :as zip]
+            [clojure.walk :as walk]))
 
 ;;------------------------------------------------------------------------------
 ;; General utilities
@@ -47,6 +49,9 @@
     (when (= 3 (count result))
       (drop 1 result))))
 
+(defn- tag--text [tag]
+  (get-in tag [:groups 1]))
+
 (defn- retrieve-all-tags
   "Retrieve a list of all tags and their offsets.
   Any delimiter changes will be dealt with here.
@@ -59,7 +64,6 @@
    :groups ['full text of tag with delimiters' 'text of tag without delimiters']}"
   [text]
 
-  ;; A tag is represented by a single entry returned by `re-seq-pos`.
   (let [update-tags-with-offset (fn [offset tags]
                                   (if (zero? offset)
                                     tags
@@ -76,7 +80,7 @@
             ;; When we do find a delim change, stop further processing.
             possible-tags (->> (re-seq-pos regex (subs text offset))
                                (reduce (fn [accum tag]
-                                         (let [delims (parse-delim-change-tag (get-in tag [:groups 1]))]
+                                         (let [delims (parse-delim-change-tag (tag--text tag))]
                                            (if delims
                                              (reduced (conj accum (assoc tag :delims delims)))
                                              (conj accum tag))))
@@ -97,6 +101,33 @@
 
                  (into tags (drop-last possible-tags))))))))
 
+;; TODO!!! Better tag content analysis
+(defn- assoc-tag-type [tag]
+  (let [text (tag--text tag)]
+    (cond
+      (= \# (first text)) (assoc tag :type :section-open)
+      (= \/ (first text)) (assoc tag :type :section-close)
+      (= \^ (first text)) (assoc tag :type :inverted-open)
+      (= \! (first text)) (assoc tag :type :comment)
+      (= \> (first text)) (assoc tag :type :partial)
+      :else (assoc tag :type :var-ref))))
+
+(defn fill-in-text
+  "Takes a linear list of tags and fills in the text that are in between the tags"
+  [text tags]
+  (reduce (fn [accum tag]
+            (if (empty? accum)
+              (if (zero? (:start tag))
+                (conj accum tag)
+                (conj accum
+                      (subs text 0 (:start tag))
+                      tag))
+
+              (conj accum
+                    (subs text (:end (last accum)) (:start tag))
+                    tag)))
+          []
+          tags))
 
 ;; TODO!!! Should throw errors when the blocks aren't matched
 (defn tags->ast
@@ -107,26 +138,154 @@
   [tags]
   (->> tags
        (reduce (fn [stack tag]
-                 (let [tag-text (str/trim (get-in tag [:groups 1]))]
-                   (cond
-                     ;; If we find something that opens a block,
-                     ;; push a new context on the stack
-                     (contains? #{\# \^} (first tag-text))
-                     (conj stack [tag])
+                 (if (string? tag)
+                   (conj-last stack tag)
 
-                     ;; If we find something that closes a block...
-                     (= \/ (first tag-text))
-                     (as-> (peek stack) $
-                       (conj $ tag)               ;; add closing tag to last context
-                       (conj-last (pop stack) $)) ;; move last context into parent context
+                   (let [tag-text (str/trim (tag--text tag))]
+                     (cond
+                       ;; If we find something that opens a block,
+                       ;; push a new context on the stack
+                       (contains? #{\# \^} (first tag-text))
+                       (conj stack [tag])
 
-                     ;; Add the tag to the active context
-                     :else
-                     (conj-last stack tag))))
+                       ;; If we find something that closes a block...
+                       (= \/ (first tag-text))
+                       (as-> (peek stack) $
+                         (conj $ tag)               ;; add closing tag to last context
+                         (conj-last (pop stack) $)) ;; move last context into parent context
+
+                       ;; Add the tag to the active context
+                       :else
+                       (conj-last stack tag)))))
                [[]])  ;; start with stack with a single empty top level context
        first))
 
+(defn- clean-var-ref [text]
+  (str/trim text))
+
+(defn ast-node->hopen-node
+  [node]
+
+  (cond
+    (string? node) node
+    (map? node) (cond
+                  (= :section-open (:type node)) node
+                  (= :var-ref (:type node))
+                  (list 'ctx-lookup (keyword (clean-var-ref (tag--text node))))
+                  (= :section-close (:type node)) node
+                  (= :inverted-open (:type node)) nil
+                  (= :comment (:type node)) nil
+                  (= :partial (:type node)) nil)
+
+    (vector? node)
+    `(~'b/let [~'data (~'ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
+      [(~'b/for ~'[ctx data]
+        [(~'b/let ~'[hopen/ctx (conj hopen/ctx ctx)]
+          ~(->> node
+                (drop 1)
+                (drop-last 1)
+                (into [])))])])))
+
+(defn postwalk-zipper [f loc opts]
+  (let [;; Locate a single node to modify
+        loc (if-some [;; try to step into the first child
+                      loc (zip/down loc)]
+
+              ;; For each child in this branch...
+              (loop [loc loc]
+
+                ;; Recursively visit & map/mutate the child node.
+                (let [loc (postwalk-zipper f loc opts)]
+
+                  ;; If there are more child nodes, keep processing...
+                  (if-some [loc (zip/right loc)]
+                    (recur loc)
+
+                    ;; All children have been processed first...
+                    ;; Now process this node itself
+                    (zip/up loc))))
+
+              ;; No child nodes?
+              ;; We've reached a leaf node
+              loc)]
+
+    ;; map/mutate the node
+    (if (and (:skip-root opts)
+             (not (some? (zip/up loc))))
+      loc
+      (zip/replace loc (f (zip/node loc))))))
+
 (defn parse [text]
-  (->> text
-       retrieve-all-tags
-       tags->ast))
+  (as-> text $
+    (retrieve-all-tags $)
+    (map assoc-tag-type $)  ;; Analyze and attach tag types
+    (fill-in-text text $)   ;; Add missing text back into the tag sequence
+    (tags->ast $)           ;; Nest structures/sections/blocks as needed
+
+    ;; Convert result to data hopen can execute on
+    (postwalk-zipper ast-node->hopen-node (zip/vector-zip $) {:skip-root true})
+    (zip/root $)))
+
+
+(comment
+
+  (parse "Hello, {{name}}")
+
+
+  (parse
+"{{#movies}}
+# {{name}}
+{{/movies}}
+")
+
+
+  (parse
+"# Movies list
+{{#movies}}
+# {{name}}
+## Actors
+{{#cast}}
+* {{name}}
+{{/cast}}
+{{/movies}}
+")
+
+
+  (let [data-template (parse
+"# Movies list
+{{#movies}}
+## {{name}}
+{{/movies}}
+")]
+    (into [] (hopen.renderer.xf/renderer data-template)
+          [[{:movies [{:name "Tropic Thunder"
+                       :cast [{:name "Ben Stiller"}
+                              {:name "RDJ"}
+                              {:name "Jack Black"}]}
+                      {:name "The secret life of Walter Mitty"
+                       :cast [{:name "Ben Stiller"}
+                              {:name "Kristen Wiig"}]}]}]]))
+
+
+   (let [data-template (parse
+"# Movies list
+{{#movies}}
+## {{name}}
+### Actors
+{{#cast}}
+* {{name}}
+{{/cast}}
+{{/movies}}
+")]
+     (->> (into [] (hopen.renderer.xf/renderer data-template)
+                [[{:movies [{:name "Tropic Thunder"
+                             :cast [{:name "Ben Stiller"}
+                                    {:name "RDJ"}
+                                    {:name "Jack Black"}]}
+                            {:name "The secret life of Walter Mitty"
+                             :cast [{:name "Ben Stiller"}
+                                    {:name "Kristen Wiig"}]}]}]])
+          (apply str)
+          (println)))
+
+  )
