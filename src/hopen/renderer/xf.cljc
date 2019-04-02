@@ -189,8 +189,11 @@
     'conj   conj
     'assoc  assoc
     'dissoc dissoc
+    'concat concat
+    'merge  merge
 
     ;; Build sequences
+    'list          list
     'take          take
     'drop          drop
     'map           map
