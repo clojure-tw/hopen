@@ -20,13 +20,16 @@
              :else element))]
    (f-eval element)))
 
-(defn- rf-block [rf env result element]
+(defn- rf-element [rf env result element]
   (or (when (seq? element)
         (let [[f-symb & args] element
               f (get-in env [:block-macro f-symb])]
           (when f
             (apply f rf env result args))))
       (rf result (tpl-eval env element))))
+
+(defn- rf-block [rf env result block]
+  (reduce (partial rf-element rf env) result block))
 
 (defn- inter-reduce [rf-items rf-separators result coll]
   (if (seq coll)
@@ -47,14 +50,10 @@
                                                result
                                                next-bindings))
                               (fn [result]
-                                (reduce (partial rf-block rf env)
-                                        result
-                                        separated-by))
+                                (rf-block rf env result separated-by))
                               result
                               (tpl-eval env coll)))
-              (reduce (partial rf-block rf env)
-                      result
-                      content)))]
+              (rf-block rf env result content)))]
     (for-binding env result (util/parse-bindings bindings-seq))))
 
 (defn- rf-let [rf env result bindings content]
@@ -62,26 +61,22 @@
                       (update env :bindings assoc symb (tpl-eval env val)))
                     env
                     (partition 2 bindings))]
-    (reduce (partial rf-block rf env)
-            result
-            content)))
+    (rf-block rf env result content)))
 
 (defn- rf-if
   ([rf env result cond then]
    (rf-if rf env result cond then nil))
   ([rf env result cond then else]
-   (reduce (partial rf-block rf env)
-           result
-           (if (tpl-eval env cond) then else))))
+   (rf-block rf env result
+             (if (tpl-eval env cond) then else))))
 
 (defn- rf-cond [rf env result & clauses]
-  (reduce (partial rf-block rf env)
-          result
-          (reduce (fn [_ [cond then]]
-                    (when (tpl-eval env cond)
-                      (reduced then)))
-                  nil
-                  (partition 2 clauses))))
+  (rf-block rf env result
+            (reduce (fn [_ [cond then]]
+                      (when (tpl-eval env cond)
+                        (reduced then)))
+                    nil
+                    (partition 2 clauses))))
 
 (defn- rf-template
   ([rf env result template-key]
@@ -94,9 +89,7 @@
                            'hopen/root data
                            'hopen/ctx data)]
      (if-let [template (get (:templates env) template-key)]
-       (reduce (partial rf-block rf inner-env)
-               result
-               template)
+       (rf-block rf inner-env result template)
        (throw (#?(:clj  Exception.
                   :cljs js/Error.)
                 (str "Template " template-key " not found in env " env)))))))
@@ -105,7 +98,7 @@
 ;; Use a `let` if you need to reduce the performance impact.
 (defn- rf-interpose [rf env result separator content]
   (reduce ((interpose separator)
-           (partial rf-block rf env))
+           (partial rf-element rf env))
           result
           content))
 
@@ -241,6 +234,4 @@
                   (let [env (update env :bindings assoc
                               'hopen/root input
                               'hopen/ctx input)]
-                    (reduce (partial rf-block rf env)
-                            result
-                            tpl)))))))
+                    (rf-block rf env result tpl)))))))
