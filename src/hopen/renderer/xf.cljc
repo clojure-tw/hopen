@@ -1,5 +1,5 @@
 (ns hopen.renderer.xf
-  (:require [clojure.string :as str]
+  (:require [hopen.renderer.env :as env]
             [hopen.util :as util]))
 
 (defn- tpl-eval [env element]
@@ -139,90 +139,23 @@
   val)
 
 (def default-env
-  {;; The templates accessible inside the current template.
-   :templates {}
+  (merge env/standard-env
+         {;; The block-macro functions get their args unevaluated and render blocks of elements in-place.
+          :block-macro
+          {'b/for       rf-for
+           'b/let       rf-let
+           'b/if        rf-if
+           'b/cond      rf-cond
+           'b/interpose rf-interpose
+           'b/template  rf-template}
 
-   ;; Block-macro functions are reducer functions which get their args unevaluated.
-   :block-macro
-   {'b/for      rf-for
-    'b/let      rf-let
-    'b/if       rf-if
-    'b/cond     rf-cond
-    'b/template rf-template
-
-    ;; Based on transducers
-    'b/interpose rf-interpose}
-
-   ;; The inline-macro functions get their args unevaluated.
-   :inline-macro
-   {'for   inline-for
-    'let   inline-let
-    'if    inline-if
-    'cond  inline-cond
-    'quote inline-quote}
-
-   ;; Contains:
-   ;; - the inline functions,
-   ;; - 'hopen/root, points to the root of the template's data, shall not be redefined.
-   ;; - 'hopen/ctx, also points to the template's data, can be locally redefined.
-   :bindings
-   {;; Get things
-    'get        get
-    'get-in     get-in
-    'collect    util/collect
-    'collect-in util/collect-in
-    'first      first
-    'next       next
-    'last       last
-    'pop        pop
-    'count      count
-
-    ;; Alter collections
-    'cons   cons
-    'conj   conj
-    'assoc  assoc
-    'dissoc dissoc
-    'concat concat
-    'merge  merge
-
-    ;; Build sequences
-    'list          list
-    'take          take
-    'drop          drop
-    'map           map
-    'comp          comp
-    'range         range
-    'cycle         cycle
-    'constantly    constantly
-    'partition     partition
-    'partition-all partition-all
-
-    ;; Some maths
-    'inc inc
-    'dec dec
-    '+   +
-    '-   -
-    '*   *
-    '/   /
-    'mod mod
-
-    ;; Compare numbers
-    '<     <
-    '<=    <=
-    '>     >
-    '>=    >=
-    '=     =
-    'not=  not=
-    'neg?  neg?
-    'zero? zero?
-    'pos?  pos?
-
-    ;; Text transformations
-    'str   str
-    'join  str/join
-    'cap   str/capitalize
-    'upper str/upper-case
-    'lower str/lower-case}})
+          ;; The inline-macro functions get their args unevaluated and render an element.
+          :inline-macro
+          {'for   inline-for
+           'let   inline-let
+           'if    inline-if
+           'cond  inline-cond
+           'quote inline-quote}}))
 
 (defn renderer
   ([tpl] (renderer tpl default-env))
