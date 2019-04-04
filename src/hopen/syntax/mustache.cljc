@@ -202,19 +202,42 @@
                   (= :var-ref (:type node))
                   (list 'ctx-lookup (keyword (clean-var-ref (tag--text node))))
                   (= :section-close (:type node)) node
-                  (= :inverted-open (:type node)) nil
+                  (= :inverted-open (:type node)) node
                   (= :comment (:type node)) nil
                   (= :partial (:type node)) nil)
 
     (vector? node)
-    (backtick/template
-     (b/let [data (ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
-       [(b/for [ctx data]
-          [(b/let [hopen/ctx (conj hopen/ctx ctx)]
-             ~(->> node
-                   (drop 1)
-                   (drop-last 1)
-                   (into [])))])]))))
+    (cond
+      (= :section-open (:type (first node))) (let [contents (->> node
+                                                                 (drop 1)
+                                                                 (drop-last 1)
+                                                                 (into []))]
+                                               (backtick/template
+                                                (b/let [data (ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
+                                                  [(b/if (and data
+                                                              (not (empty? data)))
+                                                     [(b/if (or (list? data)
+                                                                (vector? data))
+
+                                                        ;; Looks like the context might have multiple items
+                                                        [(b/for [ctx data]
+                                                           [(b/let [hopen/ctx (conj hopen/ctx ctx)]
+                                                              ~contents)])]
+
+                                                        ;; New context only has a single item
+                                                        [(b/let [hopen/ctx (conj hopen/ctx data)]
+                                                           ~contents)])])])))
+
+      (= :inverted-open (:type (first node))) (backtick/template
+                                               (b/let [data (ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
+                                                 [(b/if (or (= data nil)
+                                                            (empty? data))
+                                                    ~(->> node
+                                                          (drop 1)
+                                                          (drop-last 1)
+                                                          (into [])))]))
+      )
+      ))
 
 (defn postwalk-zipper [f loc opts]
   (let [;; Locate a single node to modify
@@ -317,5 +340,31 @@
                                     {:name "Kristen Wiig"}]}]}]])
           (apply str)
           (println)))
+
+   (let [data-template (parse
+"# Movies list
+{{#movies}}
+## {{name}}
+### Actors
+{{#cast}}
+* {{name}}
+{{/cast}}
+{{/movies}}
+{{^movies}}
+None found
+{{/movies}}
+")]
+     (->> (into [] (hopen.renderer.xf/renderer data-template)
+                [[{}]])
+          (apply str)))
+
+   (let [data-template (parse
+"{{#person?}}
+Hi {{name}}!
+{{/person?}}
+")]
+     (->> (into [] (hopen.renderer.xf/renderer data-template)
+                [[{:person? {:name "Jon"}}]])
+          (apply str)))
 
   )

@@ -131,6 +131,18 @@
 (defn- inline-quote [env val]
   val)
 
+(defn- inline-or [env & args]
+  (reduce #(if (tpl-eval env %2)
+             (reduced true)
+             false)
+          args))
+
+(defn- inline-and [env & args]
+  (reduce #(if (tpl-eval env %2)
+             true
+             (reduced false))
+          args))
+
 (defn- ctx-lookup
   "Tries to look up a field name in every context starting from most nested context first."
   [env field-name]
@@ -154,6 +166,8 @@
     'if    inline-if
     'cond  inline-cond
     'quote inline-quote
+    'or    inline-or
+    'and   inline-and
 
     'ctx-lookup ctx-lookup}
 
@@ -215,7 +229,14 @@
     'join  str/join
     'cap   str/capitalize
     'upper str/upper-case
-    'lower str/lower-case}})
+    'lower str/lower-case
+
+    'empty?  empty?
+    'not     not
+    'map?    map?
+    'list?   list?
+    'vector? vector?
+    }})
 
 (defn renderer
   ([tpl] (renderer tpl default-env))
