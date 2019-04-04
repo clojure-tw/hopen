@@ -29,6 +29,11 @@
   [coll x]
   (conj (pop coll) (conj (peek coll) x)))
 
+(defn conj-some
+  [coll & xs]
+  (->> xs
+       (filter some?)
+       (apply conj coll)))
 
 ;;------------------------------------------------------------------------------
 ;; Namespace specific functions
@@ -112,22 +117,45 @@
       (= \> (first text)) (assoc tag :type :partial)
       :else (assoc tag :type :var-ref))))
 
+(defn- discard-first-newline [s]
+  (cond
+    (str/starts-with? s "\n")
+    (subs s 1)
+    (str/starts-with? s "\r\n")
+    (subs s 2)))
+
 (defn fill-in-text
   "Takes a linear list of tags and fills in the text that are in between the tags"
   [text tags]
-  (reduce (fn [accum tag]
-            (if (empty? accum)
-              (if (zero? (:start tag))
-                (conj accum tag)
-                (conj accum
-                      (subs text 0 (:start tag))
-                      tag))
+  (let [text-between (fn [last-tag this-tag text]
+                       (let [result (cond->> (if this-tag
+                                               (subs text (:end last-tag) (:start this-tag))
+                                               (subs text (:end last-tag)))
 
-              (conj accum
-                    (subs text (:end (last accum)) (:start tag))
-                    tag)))
-          []
-          tags))
+                                      ;; Section open and close tags should not cause additional newlines to be inserted
+                                      (contains? #{:section-open :section-close :inverted-open} (:type last-tag))
+                                      (discard-first-newline))]
+                         (if (empty? result)
+                           nil
+                           result)))
+
+        result (reduce (fn [accum tag]
+                         (if (empty? accum)
+                           (if (zero? (:start tag))
+                             (conj accum tag)
+                             (conj accum
+                                   (subs text 0 (:start tag))
+                                   tag))
+
+                           (conj-some accum
+                                      (text-between (last accum) tag text)
+                                      tag)))
+                       []
+                       tags)]
+
+    (if (> (count text) (:end (last tags)))
+      (conj-some result (text-between (last tags) nil text))
+      result)))
 
 ;; TODO!!! Should throw errors when the blocks aren't matched
 (defn tags->ast
