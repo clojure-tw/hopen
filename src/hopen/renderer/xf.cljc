@@ -143,10 +143,6 @@
              (reduced false))
           args))
 
-(defn- ctx-lookup
-  "Tries to look up a field name in every context starting from most nested context first."
-  [env field-name]
-  (some #(get % (keyword field-name)) (reverse (get-in env [:bindings 'hopen/ctx] []))))
 
 (def default-env
   {;; Block-macro functions are reducer functions which get their args unevaluated.
@@ -167,9 +163,7 @@
     'cond  inline-cond
     'quote inline-quote
     'or    inline-or
-    'and   inline-and
-
-    'ctx-lookup ctx-lookup}
+    'and   inline-and}
 
    ;; Contains:
    ;; - the inline functions,

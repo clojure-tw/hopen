@@ -65,8 +65,19 @@
  <%={{ }}=%>
  * {{ default_tags_again }}
 ")
+
            [{:start 4, :end 20, :groups ["{{default_tags}}" "default_tags"]}
+            {:start 22,
+             :end 33,
+             :groups ["{{=<% %>=}}" "=<% %>="],
+             :delims ["<%" "%>"],
+             :type :delim-change}
             {:start 37, :end 57, :groups ["<% erb_style_tags %>" " erb_style_tags "]}
+            {:start 59,
+             :end 70,
+             :groups ["<%={{ }}=%>" "={{ }}="],
+             :delims ["{{" "}}"],
+             :type :delim-change}
             {:start 74,
              :end 98,
              :groups ["{{ default_tags_again }}" " default_tags_again "]}])))
@@ -96,6 +107,90 @@
                 {:start 50, :end 58, :groups ["{{name}}" "name"]}
                 {:start 62, :end 73, :groups ["{{/actors}}" "/actors"]}]
                {:start 75, :end 85, :groups ["{{/movie}}" "/movie"]}]
-              {:start 88, :end 101, :groups ["{{something}}" "something"]}]))))
+              {:start 88, :end 101, :groups ["{{something}}" "something"]}])))))
+
+(deftest feature-validation
+  (testing "False values or Empty lists"
+    (let [template "Shown.
+{{#person}}
+Never shown!
+{{/person}}"]
+      (is (= (#'sut/render template {:person false})
+             "Shown.\n"))
+
+      (is (= (#'sut/render template {})
+             "Shown.\n"))))
+
+  (testing "Non-Empty Lists"
+    (is (= (#'sut/render "{{#repo}}
+<b>{{name}}</b>
+{{/repo}}
+"
+                         {:repo [{:name "resque"}
+                                 {:name "hub"}
+                                 {:name "rip"}]})
+
+           "<b>resque</b>\n<b>hub</b>\n<b>rip</b>\n"))
+
+    (is (= (#'sut/render "# Movies list
+{{#movies}}
+## {{name}}
+### Actors
+{{#cast}}
+* {{name}}
+{{/cast}}
+{{/movies}}
+"
+                 {:movies [{:name "Tropic Thunder"
+                            :cast [{:name "Ben Stiller"}
+                                   {:name "RDJ"}
+                                   {:name "Jack Black"}]}
+                           {:name "The secret life of Walter Mitty"
+                            :cast [{:name "Ben Stiller"}
+                                   {:name "Kristen Wiig"}]}]})
+
+           "# Movies list\n## Tropic Thunder\n### Actors\n* Ben Stiller\n* RDJ\n* Jack Black\n## The secret life of Walter Mitty\n### Actors\n* Ben Stiller\n* Kristen Wiig\n"))
+    )
+
+  (testing "Non-False Values"
+    (= (#'sut/render "{{#person?}}
+Hi {{name}}!
+{{/person?}}
+"
+                     {:person? {:name "Jon"}})
+
+       "Hi Jon!\n")
+    )
+
+  (testing "Inverted Sections"
+    (is (=
+         (#'sut/render "{{#repo}}
+<b>{{name}}</b>
+{{/repo}}
+{{^repo}}
+No repos :(
+{{/repo}}
+"
+                       {:repo []})
+
+         "No repos :(\n")))
+
+  (testing "Comments"
+    (is (= (#'sut/render "<h1>Today{{! ignore me }}.</h1>" {})
+           "<h1>Today.</h1>")))
+
+
+  (testing "Set Delimiter"
+    (is (= (#'sut/render "* {{hello}}
+{{=<% %>=}}
+* <% world %>
+<%={{ }}=%>
+* {{again}}
+"
+                         {:hello "hello"
+                          :world "world"
+                          :again "again"})
+
+           "* hello\n* world\n* again\n")))
 
   )

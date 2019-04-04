@@ -36,6 +36,13 @@
        (filter some?)
        (apply conj coll)))
 
+(defn deep-merge
+  [a b]
+  (if (map? a)
+    (into a (for [[k v] b]
+              [k (deep-merge (a k) v)]))
+    b))
+
 ;;------------------------------------------------------------------------------
 ;; Namespace specific functions
 ;;------------------------------------------------------------------------------
@@ -88,7 +95,9 @@
                                (reduce (fn [accum tag]
                                          (let [delims (parse-delim-change-tag (tag--text tag))]
                                            (if delims
-                                             (reduced (conj accum (assoc tag :delims delims)))
+                                             (reduced (conj accum (assoc tag
+                                                                         :delims delims
+                                                                         :type :delim-change)))
                                              (conj accum tag))))
                                        [])
                                (update-tags-with-offset offset))]
@@ -105,12 +114,13 @@
                  ;; restart at the end of the change delim tag
                  (->> possible-tags last :end)
 
-                 (into tags (drop-last possible-tags))))))))
+                 (into tags possible-tags)))))))
 
 ;; TODO!!! Better tag content analysis
 (defn- assoc-tag-type [tag]
   (let [text (tag--text tag)]
     (cond
+      (:type tag) tag  ;; don't alter tags with types already assigned
       (= \# (first text)) (assoc tag :type :section-open)
       (= \/ (first text)) (assoc tag :type :section-close)
       (= \^ (first text)) (assoc tag :type :inverted-open)
@@ -134,7 +144,7 @@
                                                (subs text (:end last-tag)))
 
                                       ;; Section open and close tags should not cause additional newlines to be inserted
-                                      (contains? #{:section-open :section-close :inverted-open} (:type last-tag))
+                                      (contains? #{:section-open :section-close :inverted-open :delim-change} (:type last-tag))
                                       (discard-first-newline))]
                          (if (empty? result)
                            nil
@@ -204,7 +214,10 @@
                   (= :section-close (:type node)) node
                   (= :inverted-open (:type node)) node
                   (= :comment (:type node)) nil
-                  (= :partial (:type node)) nil)
+                  (= :partial (:type node)) nil
+                  (= :delim-change (:type node)) nil
+                  :else (throw (Exception. (str "Does not how how to deal with tags of type: " (:type node)) ))
+                  )
 
     (vector? node)
     (cond
@@ -221,11 +234,11 @@
 
                                                         ;; Looks like the context might have multiple items
                                                         [(b/for [ctx data]
-                                                           [(b/let [hopen/ctx (conj hopen/ctx ctx)]
+                                                           [(b/let [mustache/ctx (conj mustache/ctx ctx)]
                                                               ~contents)])]
 
                                                         ;; New context only has a single item
-                                                        [(b/let [hopen/ctx (conj hopen/ctx data)]
+                                                        [(b/let [mustache/ctx (conj mustache/ctx data)]
                                                            ~contents)])])])))
 
       (= :inverted-open (:type (first node))) (backtick/template
@@ -235,9 +248,7 @@
                                                     ~(->> node
                                                           (drop 1)
                                                           (drop-last 1)
-                                                          (into [])))]))
-      )
-      ))
+                                                          (into [])))])))))
 
 (defn postwalk-zipper [f loc opts]
   (let [;; Locate a single node to modify
@@ -280,91 +291,19 @@
     (zip/root $)))
 
 
-(comment
+(defn- ctx-lookup
+  "Tries to look up a field name in every context starting from most nested context first."
+  [env field-name]
+  (some #(get % (keyword field-name)) (reverse (get-in env [:bindings 'mustache/ctx] []))))
 
-  (parse "Hello, {{name}}")
+(defn init-env [env data-root]
+  (deep-merge
+   env
+   {:inline-macro {'ctx-lookup ctx-lookup}
+    :bindings {'mustache/ctx [data-root]}}))
 
-
-  (parse
-"{{#movies}}
-# {{name}}
-{{/movies}}
-")
-
-
-  (parse
-"# Movies list
-{{#movies}}
-# {{name}}
-## Actors
-{{#cast}}
-* {{name}}
-{{/cast}}
-{{/movies}}
-")
-
-
-  (let [data-template (parse
-"# Movies list
-{{#movies}}
-## {{name}}
-{{/movies}}
-")]
-    (into [] (hopen.renderer.xf/renderer data-template)
-          [[{:movies [{:name "Tropic Thunder"
-                       :cast [{:name "Ben Stiller"}
-                              {:name "RDJ"}
-                              {:name "Jack Black"}]}
-                      {:name "The secret life of Walter Mitty"
-                       :cast [{:name "Ben Stiller"}
-                              {:name "Kristen Wiig"}]}]}]]))
-
-
-   (let [data-template (parse
-"# Movies list
-{{#movies}}
-## {{name}}
-### Actors
-{{#cast}}
-* {{name}}
-{{/cast}}
-{{/movies}}
-")]
-     (->> (into [] (hopen.renderer.xf/renderer data-template)
-                [[{:movies [{:name "Tropic Thunder"
-                             :cast [{:name "Ben Stiller"}
-                                    {:name "RDJ"}
-                                    {:name "Jack Black"}]}
-                            {:name "The secret life of Walter Mitty"
-                             :cast [{:name "Ben Stiller"}
-                                    {:name "Kristen Wiig"}]}]}]])
-          (apply str)
-          (println)))
-
-   (let [data-template (parse
-"# Movies list
-{{#movies}}
-## {{name}}
-### Actors
-{{#cast}}
-* {{name}}
-{{/cast}}
-{{/movies}}
-{{^movies}}
-None found
-{{/movies}}
-")]
-     (->> (into [] (hopen.renderer.xf/renderer data-template)
-                [[{}]])
-          (apply str)))
-
-   (let [data-template (parse
-"{{#person?}}
-Hi {{name}}!
-{{/person?}}
-")]
-     (->> (into [] (hopen.renderer.xf/renderer data-template)
-                [[{:person? {:name "Jon"}}]])
-          (apply str)))
-
-  )
+(defn- render [template data]
+  (let [data-template (parse template)]
+    (->> (into [] (hopen.renderer.xf/renderer data-template (init-env hopen.renderer.xf/default-env data))
+               [data])
+         (apply str))))
