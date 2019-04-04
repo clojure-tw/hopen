@@ -2,7 +2,12 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                       :include-macros true])
-            [hopen.util :refer [parse-bindings collect collect-in]]))
+            [hopen.util :refer [triml parse-bindings collect collect-in]]))
+
+(deftest triml-test
+  (is (= (triml "hello,
+                | world!")
+         "hello,\n world!")))
 
 (deftest parse-bindings-test
   (testing "Example-spec the function's input and output"

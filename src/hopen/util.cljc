@@ -1,4 +1,18 @@
-(ns hopen.util)
+(ns hopen.util
+  (:require [clojure.string :as str]))
+
+(defn triml
+  "Trims the white spaces at the beginning of each line in the text, including the delimiter."
+  ([text] (triml text "|"))
+  ([text delimiter]
+   (transduce (comp (map (fn [line]
+                           (let [trimmed (str/triml line)]
+                             (if (str/starts-with? trimmed delimiter)
+                               (subs trimmed (count delimiter))
+                               line))))
+                    (interpose "\n"))
+              str
+              (str/split-lines text))))
 
 (defn binding-partition
   "A transducer which is partitioning a multi-variables binding sequence."
