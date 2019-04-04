@@ -3,7 +3,8 @@
   (:require [clojure.string :as str]
             [hopen.syntax.util :as util]
             [clojure.zip :as zip]
-            [clojure.walk :as walk]))
+            [clojure.walk :as walk]
+            [backtick]))
 
 ;;------------------------------------------------------------------------------
 ;; General utilities
@@ -206,13 +207,14 @@
                   (= :partial (:type node)) nil)
 
     (vector? node)
-    `(~'b/let [~'data (~'ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
-      [(~'b/for ~'[ctx data]
-        [(~'b/let ~'[hopen/ctx (conj hopen/ctx ctx)]
-          ~(->> node
-                (drop 1)
-                (drop-last 1)
-                (into [])))])])))
+    (backtick/template
+     (b/let [data (ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
+       [(b/for [ctx data]
+          [(b/let [hopen/ctx (conj hopen/ctx ctx)]
+             ~(->> node
+                   (drop 1)
+                   (drop-last 1)
+                   (into [])))])]))))
 
 (defn postwalk-zipper [f loc opts]
   (let [;; Locate a single node to modify
