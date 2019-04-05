@@ -8,7 +8,8 @@
   :target-path "target/%s"
 
   :dependencies [[org.clojure/clojure "1.10.0"]
-                 [org.clojure/clojurescript "1.10.520"]]
+                 [org.clojure/clojurescript "1.10.520"]
+                 [instaparse "1.4.10"]]
   :plugins [[lein-doo "0.1.10"]]
   :cljsbuild
   {:builds [{:id "node-test"
