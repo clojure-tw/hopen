@@ -111,7 +111,14 @@
         (partition-template default-delimiters)
         ["aa {{= | | =}} bb |cc| dd"]))
 
+;; Simple implementation for now.
+(defn compile-to-data-template [[type val :as segment]]
+  (case type
+    :text (apply str (map str val))
+    :syntax (list 'hopen/ctx (keyword (str/trim val)))))
 
 (defn parser [template]
-  ;; Dummy implementation for now.
-  [template])
+  (into []
+        (comp (partition-template default-delimiters)
+              (map compile-to-data-template))
+        [template]))

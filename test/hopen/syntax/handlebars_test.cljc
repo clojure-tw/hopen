@@ -53,4 +53,21 @@
     (are [text-template data-template]
       (= (parser text-template) data-template)
 
-      "Hello, world." ["Hello, world."])))
+      "Hello, world." ["Hello, world."]
+
+      (triml "<div class=\"entry\">
+             |  <h1>{{title}}</h1>
+             |  <div class=\"body\">
+             |    {{body}}
+             |  </div>
+             |</div>")
+      [(triml "<div class=\"entry\">
+              |  <h1>")
+       '(hopen/ctx :title)
+       (triml "</h1>
+              |  <div class=\"body\">
+              |    ")
+       '(hopen/ctx :body)
+       (triml "
+              |  </div>
+              |</div>")])))
