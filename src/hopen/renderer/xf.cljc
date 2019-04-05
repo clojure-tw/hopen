@@ -14,9 +14,7 @@
                                     (apply f env args)
                                     (if-let [f (get-in env [:bindings f-symb])]
                                       (apply f (mapv f-eval args))
-                                      (throw (#?(:clj  Exception.
-                                                 :cljs js/Error.)
-                                               (str "Function " f-symb " not found in env " env))))))
+                                      (util/throw-exception (str "Function " f-symb " not found in env " env)))))
              :else element))]
    (f-eval element)))
 

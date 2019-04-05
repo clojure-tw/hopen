@@ -53,3 +53,7 @@
                     coll))
             [data]
             path)))
+
+(defn throw-exception [message]
+  (throw (#?(:clj  Exception.
+             :cljs js/Error.) message)))
