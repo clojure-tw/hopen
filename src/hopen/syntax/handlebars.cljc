@@ -21,9 +21,6 @@
                             (re-quote close-delim)))]
     (re-find re segment)))
 
-(comment
-  (parse-change-delim "= < > =}}blah blah" "}}"))
-
 (defn- parse-text-segments
   "Parses and collects all the text segments until a syntax block is found.
 
@@ -59,18 +56,6 @@
        open-delim
        close-delim])))
 
-(comment
-  (parse-text-segments (text->segment "")
-                       "{{" "}}")
-  (parse-text-segments (text->segment "{{ aa }} bb")
-                       "{{" "}}")
-  (parse-text-segments (text->segment "aa {{ bb }} cc")
-                       "{{" "}}")
-  (parse-text-segments (text->segment "aa {{= { } =}} bb { cc } dd")
-                       "{{" "}}")
-  (parse-text-segments (text->segment "aa {{= {{{ }}} =}} bb")
-                       "{{" "}}"))
-
 (defn- parse-syntax-segment
   "Parses the syntax segment, assuming that this function is provided a segment
   at the start of that syntax segment.
@@ -81,11 +66,6 @@
     [(sub-sequence segment 0 index)
      (sub-sequence segment (+ index (count close-delim)))]
     (throw-exception close-delim-not-found-msg)))
-
-(comment
-  (parse-syntax-segment (text->segment "aoeu") "}}")
-  (parse-syntax-segment (text->segment "aoeu}}") "}}")
-  (parse-syntax-segment (text->segment "aoeu}}blah blah") "}}"))
 
 (defn partition-template [delimiters]
   (fn [rf]
