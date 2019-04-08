@@ -1,7 +1,8 @@
 (ns hopen.syntax.handlebars
   (:require [clojure.string :as str]
+            [clojure.zip :as z]
             [hopen.syntax.util :refer [re-quote]]
-            [hopen.util :refer [throw-exception]]
+            [hopen.util :refer [throw-exception triml]]
             [instaparse.gll :refer [text->segment sub-sequence]]))
 
 (def default-delimiters {:open "{{", :close "}}"})
@@ -67,7 +68,7 @@
      (sub-sequence segment (+ index (count close-delim)))]
     (throw-exception close-delim-not-found-msg)))
 
-(defn partition-template [delimiters]
+(defn template-partition [delimiters]
   (fn [rf]
     (fn
       ([] (rf))
@@ -96,29 +97,130 @@
 
 (comment
   (into []
-        (partition-template default-delimiters)
+        (template-partition default-delimiters)
         [""])
 
   (into []
-        (partition-template default-delimiters)
+        (template-partition default-delimiters)
         ["aa bb"])
 
   (into []
-        (partition-template default-delimiters)
+        (template-partition default-delimiters)
         ["aa {{= < > =}} bb"])
 
   (into []
-        (partition-template default-delimiters)
+        (template-partition default-delimiters)
         ["aa {{= | | =}} bb |cc| dd"]))
 
-;; Simple implementation for now.
-(defn compile-to-data-template [[type val :as segment]]
-  (case type
-    :text (apply str (map str val))
-    :syntax (list 'hopen/ctx (keyword (str/trim val)))))
+(declare handlebars-args)
 
-(defn parser [template]
-  (into []
-        (comp (partition-template default-delimiters)
-              (map compile-to-data-template))
-        [template]))
+(defn- handlebars-deref-expression [s]
+  {:type :deref
+   :fields (str/split s #"\.")})
+
+(defn- handlebars-expression-group [s]
+  (let [[_ part0 next-parts] (re-find #"\s*(\S+)\s*(.*)" s)]
+    (if (str/blank? next-parts)
+      (handlebars-deref-expression part0)
+      {:type :call
+       :func part0
+       :args (handlebars-args next-parts)})))
+
+(comment
+  (handlebars-expression-group "aa.bb")
+  (handlebars-expression-group "aa bb.cc dd.ee.ff"))
+
+;; TODO: support hash arguments.
+(defn- handlebars-args [s]
+  ;; TODO: support recursive parenthesis grouping.
+  (let [args (->> (str/split (str/trim s) #"\s+")
+                  (remove str/blank?))]
+    (mapv handlebars-expression-group args)))
+
+;; TODO: support `else` and chaining conditionals.
+(defn handlebars-node
+  "Returns a handlebars node from an element of the segment partition."
+  [[type segment]]
+  (case type
+    :text {:type :text
+           :value (apply str (map str segment))}
+    :syntax (if-let [[_ block-name exprs] (re-find #"^\#(\S+)\s*(.*)" segment)]
+              {:type (keyword block-name)
+               :open-block? true
+               :args (handlebars-args exprs)}
+              (if-let [[_ block-name] (re-find #"^\/(\S+)" segment)]
+                {:type (keyword block-name)
+                 :close-block? true}
+                (handlebars-expression-group segment)))))
+
+(defn handlebars-zipper
+  ([] (handlebars-zipper {:type :root, :branch? true}))
+  ([root] (z/zipper :branch?
+                    :children
+                    (fn [node children] ; make-node
+                      (assoc node :children (vec children)))
+                    root)))
+
+(defn handlebars-zipper-reducer
+  "Builds a tree-shaped representation of the handlebar's nodes."
+  ([] (handlebars-zipper))
+  ([zipper] zipper)
+  ([zipper node]
+   (cond
+     (:open-block? node) (-> zipper
+                             (z/append-child (-> node
+                                                 (dissoc :open-block?)
+                                                 (assoc :branch? true)))
+                             (z/down)
+                             (z/rightmost))
+     (:close-block? node) (z/up zipper)
+     :else (z/append-child zipper node))))
+
+(defn to-data-template
+  "Generates a data-template from a handlebars tree's node."
+  [node]
+  (case (:type node)
+    :root (mapv to-data-template (:children node))
+    :text (:value node)
+    :call (let [{:keys [func args]} node]
+            (list* (symbol func) (map to-data-template args)))
+    :deref (let [[field0 & next-fields :as fields] (:fields node)]
+             (if (nil? next-fields)
+               (list 'hopen/ctx (keyword field0))
+               (list 'get-in 'hopen/ctx (mapv keyword fields))))
+    :if (list 'b/if (to-data-template (-> node :args first))
+              (mapv to-data-template (:children node)))
+    :each (list 'b/for ['hopen/ctx (to-data-template (-> node :args first))]
+                (mapv to-data-template (:children node)))
+    ["Unhandled:" node]))
+
+(defn parse [template]
+  (-> (transduce (comp (template-partition default-delimiters)
+                       (map handlebars-node))
+                 handlebars-zipper-reducer
+                 [template])
+      z/root
+      to-data-template))
+
+
+(comment
+
+  (parse "aa {{= | | =}} bb |cc.dd.ee| ff")
+  (parse "{{aa bb}}")
+  (parse "{{aa bb.cc dd.ee.ff}}")
+  (parse "aa {{#if bb}} cc {{#each dd.dd}} ee {{/each}} ff {{/if}} gg")
+  
+  "! this is a comment"
+  "!-- this is a comment --"
+
+  "#each movie.staffs"
+  "/each"
+
+  "#if movie"
+  "else if person"
+  "else"
+  "/if"
+
+  "full-name-helper person arg1=val1 arg2=val2 ..."
+
+  "> sub-template var1=val1 var2=val2 ...")
