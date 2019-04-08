@@ -95,19 +95,46 @@
  {{/movie}}
 
  {{something}}
-"
-          ]
+"]
       (is (= (->> text
                   (#'sut/retrieve-all-tags)
+                  (map #'sut/assoc-tag-type)
                   (#'sut/tags->ast))
-
-             [{:start 2, :end 15, :groups ["{{something}}" "something"]}
-              [{:start 18, :end 29, :groups ["{{#movies}}" "#movies"]}
-               [{:start 33, :end 44, :groups ["{{#actors}}" "#actors"]}
-                {:start 50, :end 58, :groups ["{{name}}" "name"]}
-                {:start 62, :end 73, :groups ["{{/actors}}" "/actors"]}]
-               {:start 75, :end 85, :groups ["{{/movie}}" "/movie"]}]
-              {:start 88, :end 101, :groups ["{{something}}" "something"]}])))))
+             [{:start 2,
+               :end 15,
+               :groups ["{{something}}" "something"],
+               :type :var-ref,
+               :var-name "something"}
+              [{:start 18,
+                :end 29,
+                :groups ["{{#movies}}" "#movies"],
+                :type :section-open,
+                :section-name "movies"}
+               [{:start 33,
+                 :end 44,
+                 :groups ["{{#actors}}" "#actors"],
+                 :type :section-open,
+                 :section-name "actors"}
+                {:start 50,
+                 :end 58,
+                 :groups ["{{name}}" "name"],
+                 :type :var-ref,
+                 :var-name "name"}
+                {:start 62,
+                 :end 73,
+                 :groups ["{{/actors}}" "/actors"],
+                 :type :section-close,
+                 :section-name "actors"}]
+               {:start 75,
+                :end 85,
+                :groups ["{{/movie}}" "/movie"],
+                :type :section-close,
+                :section-name "movie"}]
+              {:start 88,
+               :end 101,
+               :groups ["{{something}}" "something"],
+               :type :var-ref,
+               :var-name "something"}])))))
 
 (deftest feature-validation
   (testing "False values or Empty lists"
@@ -149,8 +176,7 @@ Never shown!
                             :cast [{:name "Ben Stiller"}
                                    {:name "Kristen Wiig"}]}]})
 
-           "# Movies list\n## Tropic Thunder\n### Actors\n* Ben Stiller\n* RDJ\n* Jack Black\n## The secret life of Walter Mitty\n### Actors\n* Ben Stiller\n* Kristen Wiig\n"))
-    )
+           "# Movies list\n## Tropic Thunder\n### Actors\n* Ben Stiller\n* RDJ\n* Jack Black\n## The secret life of Walter Mitty\n### Actors\n* Ben Stiller\n* Kristen Wiig\n")))
 
   (testing "Non-False Values"
     (= (#'sut/render "{{#person?}}
@@ -159,8 +185,7 @@ Hi {{name}}!
 "
                      {:person? {:name "Jon"}})
 
-       "Hi Jon!\n")
-    )
+       "Hi Jon!\n"))
 
   (testing "Inverted Sections"
     (is (=
@@ -191,6 +216,33 @@ No repos :(
                           :world "world"
                           :again "again"})
 
-           "* hello\n* world\n* again\n")))
+           "* hello\n* world\n* again\n"))))
 
-  )
+
+(deftest better-tag-parsing
+  (testing "ignore whitespace"
+    (let [text
+"{{#   repo}}
+<b>{{name}}</b>
+{{ /  repo}}
+"]
+
+      (is (= (->> text
+                  (#'sut/retrieve-all-tags)
+                  (map #'sut/assoc-tag-type))
+
+             [{:start 0,
+               :end 12,
+               :groups ["{{#   repo}}" "#   repo"],
+               :type :section-open,
+               :section-name "repo"}
+              {:start 16,
+               :end 24,
+               :groups ["{{name}}" "name"],
+               :type :var-ref,
+               :var-name "name"}
+              {:start 29,
+               :end 41,
+               :groups ["{{ /  repo}}" " /  repo"],
+               :type :section-close,
+               :section-name "repo"}])))))

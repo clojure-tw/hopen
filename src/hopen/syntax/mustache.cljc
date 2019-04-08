@@ -4,7 +4,8 @@
             [hopen.syntax.util :as util]
             [clojure.zip :as zip]
             [clojure.walk :as walk]
-            [backtick]))
+            [backtick]
+            [better-cond.core :as b]))
 
 ;;------------------------------------------------------------------------------
 ;; General utilities
@@ -116,17 +117,37 @@
 
                  (into tags possible-tags)))))))
 
-;; TODO!!! Better tag content analysis
 (defn- assoc-tag-type [tag]
-  (let [text (tag--text tag)]
-    (cond
-      (:type tag) tag  ;; don't alter tags with types already assigned
-      (= \# (first text)) (assoc tag :type :section-open)
-      (= \/ (first text)) (assoc tag :type :section-close)
-      (= \^ (first text)) (assoc tag :type :inverted-open)
-      (= \! (first text)) (assoc tag :type :comment)
-      (= \> (first text)) (assoc tag :type :partial)
-      :else (assoc tag :type :var-ref))))
+  (if (:type tag)
+    tag  ;; don't alter tags with types already assigned
+
+    ;; No type has been assigned yet...
+    (let [text (tag--text tag)]
+      (b/cond
+        ;; Does the text look like some kind of section tag??
+        :let [parsed-tag (re-matches #"^\s*([\#\/\^\>])\s*([a-zA-Z0-9\?-]+)" text)]
+        (some? parsed-tag) (-> (cond
+                                  (= "#" (second parsed-tag)) (assoc tag :type :section-open)
+                                  (= "/" (second parsed-tag)) (assoc tag :type :section-close)
+                                  (= "^" (second parsed-tag)) (assoc tag :type :inverted-open)
+                                  (= ">" (second parsed-tag)) (assoc tag :type :partial)
+                                  :else (throw (Exception. (str "Unhandled section tag encountered: " text))))
+                               (assoc :section-name (nth parsed-tag 2)))
+
+        ;; Does it look like a comment?
+        ;; A comment is anything that starts with a "!"
+        (some? (re-find #"^\s*\!" text)) (assoc tag :type :comment)
+
+        ;; Does the text look like some kind of variable name?
+        :let [var-name-match (re-matches #"^\s*([a-zA-Z0-9\?-]+)\s*" text)]
+        (some? var-name-match) (assoc tag
+                                      :type :var-ref
+                                      :var-name (second var-name-match))
+
+        ;; We don't really know what we're looking at.
+        ;; Report something has gone wrong.
+        :else
+        (throw (Exception. (str "Invalid tag: " text)))))))
 
 (defn- discard-first-newline [s]
   (cond
@@ -180,27 +201,23 @@
                  (if (string? tag)
                    (conj-last stack tag)
 
-                   (let [tag-text (str/trim (tag--text tag))]
-                     (cond
-                       ;; If we find something that opens a block,
-                       ;; push a new context on the stack
-                       (contains? #{\# \^} (first tag-text))
-                       (conj stack [tag])
+                   (cond
+                     ;; If we find something that opens a block,
+                     ;; push a new context on the stack
+                     (contains? #{:section-open :inverted-open} (:type tag))
+                     (conj stack [tag])
 
-                       ;; If we find something that closes a block...
-                       (= \/ (first tag-text))
-                       (as-> (peek stack) $
-                         (conj $ tag)               ;; add closing tag to last context
-                         (conj-last (pop stack) $)) ;; move last context into parent context
+                     ;; If we find something that closes a block...
+                     (= :section-close (:type tag))
+                     (as-> (peek stack) $
+                       (conj $ tag)               ;; add closing tag to last context
+                       (conj-last (pop stack) $)) ;; move last context into parent context
 
-                       ;; Add the tag to the active context
-                       :else
-                       (conj-last stack tag)))))
+                     ;; Add the tag to the active context
+                     :else
+                     (conj-last stack tag))))
                [[]])  ;; start with stack with a single empty top level context
        first))
-
-(defn- clean-var-ref [text]
-  (str/trim text))
 
 (defn ast-node->hopen-node
   [node]
@@ -210,14 +227,13 @@
     (map? node) (cond
                   (= :section-open (:type node)) node
                   (= :var-ref (:type node))
-                  (list 'ctx-lookup (keyword (clean-var-ref (tag--text node))))
+                  (list 'ctx-lookup (keyword (:var-name node)))
                   (= :section-close (:type node)) node
                   (= :inverted-open (:type node)) node
                   (= :comment (:type node)) nil
                   (= :partial (:type node)) nil
                   (= :delim-change (:type node)) nil
-                  :else (throw (Exception. (str "Does not how how to deal with tags of type: " (:type node)) ))
-                  )
+                  :else (throw (Exception. (str "Does not how how to deal with tags of type: " (:type node)))))
 
     (vector? node)
     (cond
@@ -226,7 +242,7 @@
                                                                  (drop-last 1)
                                                                  (into []))]
                                                (backtick/template
-                                                (b/let [data (ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
+                                                (b/let [data (ctx-lookup ~(keyword (:section-name (first node))))]
                                                   [(b/if (and data
                                                               (not (empty? data)))
                                                      [(b/if (or (list? data)
@@ -242,7 +258,7 @@
                                                            ~contents)])])])))
 
       (= :inverted-open (:type (first node))) (backtick/template
-                                               (b/let [data (ctx-lookup ~(keyword (subs (tag--text (first node)) 1)))]
+                                               (b/let [data (ctx-lookup ~(keyword (:section-name (first node))))]
                                                  [(b/if (or (= data nil)
                                                             (empty? data))
                                                     ~(->> node
@@ -304,6 +320,6 @@
 
 (defn- render [template data]
   (let [data-template (parse template)]
-    (->> (into [] (hopen.renderer.xf/renderer data-template (init-env hopen.renderer.xf/default-env data))
+    (->> (into [] (#'hopen.renderer.xf/renderer data-template (init-env hopen.renderer.xf/default-env data))
                [data])
          (apply str))))

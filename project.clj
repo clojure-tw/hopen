@@ -9,7 +9,8 @@
 
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [org.clojure/clojurescript "1.10.520"]
-                 [backtick "0.3.4"]]
+                 [backtick "0.3.4"]
+                 [better-cond "2.0.2"]]
   :plugins [[lein-doo "0.1.10"]]
   :cljsbuild
   {:builds [{:id "node-test"
