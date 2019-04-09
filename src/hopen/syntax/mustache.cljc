@@ -117,6 +117,47 @@
 
                  (into tags possible-tags)))))))
 
+(defn- retrieve-newline-offsets [text]
+  (let [offsets (->> (re-seq-pos #"(\r\n|\r|\n)" text)
+                     (map :start)
+                     (into []))]
+
+    ;; If text doesn't end with a newline,
+    ;; add a fake newline at the end of the string so every line in the text has
+    ;; an associated line end offset
+    (if (not= (last offsets) (dec (count text)) )
+      (conj offsets (count text))
+      offsets)))
+
+(defn- join-tag-lineno [tags text]
+  (letfn [(update-tag-with-current-lineno [state tag]
+            (update state :tags conj (assoc tag :lineno (:lineno state))))]
+
+    (->> tags
+         (reduce (fn [state tag]
+                   ;; Is the tag outside the current line?
+                   (if (> (:start tag) (first (:newlines state)))
+                     ;; Update :newlines & lineno until we reach the line this tag is on
+                     (-> (reduce (fn [state newline-offset]
+                                   ;; Consume some newlines while tracking where we are
+
+                                   (if (> (:start tag) newline-offset)
+                                     (-> state
+                                         (update :lineno inc)
+                                         (update :newlines rest))
+                                     (reduced state)))
+                                 state
+                                 (:newlines state))
+
+                         (update-tag-with-current-lineno tag))
+
+                     ;; Add the current number to the tag
+                     (update-tag-with-current-lineno state tag)))
+                 {:newlines (retrieve-newline-offsets text)
+                  :lineno 1
+                  :tags []})
+         :tags)))
+
 (defn- assoc-tag-type [tag]
   (if (:type tag)
     tag  ;; don't alter tags with types already assigned
@@ -189,35 +230,54 @@
       (conj-some result (text-between (last tags) nil text))
       result)))
 
-;; TODO!!! Should throw errors when the blocks aren't matched
 (defn tags->ast
   "Given a flat list of `tags`, return another list of `tags` but with blocks properly grouped.
 
   Specifically, tags with content that start with the characters '#' or '^' opens a block.
   Tag with '/' closes a block."
   [tags]
-  (->> tags
-       (reduce (fn [stack tag]
-                 (if (string? tag)
-                   (conj-last stack tag)
 
-                   (cond
-                     ;; If we find something that opens a block,
-                     ;; push a new context on the stack
-                     (contains? #{:section-open :inverted-open} (:type tag))
-                     (conj stack [tag])
+  (let [result (reduce (fn [stack tag]
+                         (if (string? tag)
+                           (conj-last stack tag)
 
-                     ;; If we find something that closes a block...
-                     (= :section-close (:type tag))
-                     (as-> (peek stack) $
-                       (conj $ tag)               ;; add closing tag to last context
-                       (conj-last (pop stack) $)) ;; move last context into parent context
+                           (cond
+                             ;; If we find something that opens a block,
+                             ;; push a new context on the stack
+                             (contains? #{:section-open :inverted-open} (:type tag))
+                             (conj stack [tag])
 
-                     ;; Add the tag to the active context
-                     :else
-                     (conj-last stack tag))))
-               [[]])  ;; start with stack with a single empty top level context
-       first))
+                             ;; If we find something that closes a block...
+                             (= :section-close (:type tag))
+                             (as-> (peek stack) $
+                               (conj $ tag)               ;; add closing tag to last context
+                               (conj-last (pop stack) $)) ;; move last context into parent context
+
+                             ;; Add the tag to the active context
+                             :else
+                             (conj-last stack tag))))
+                       [[]]  ;; start with stack with a single empty top level context
+                       tags)]
+
+    ;; We've processed all the tags.
+    ;; If all went well, we should have exactly one open contet that represents a valid nested sections.
+    ;; If the user left some sections unclosed, we'd end up with multiple contexts here.
+    ;; We'll place these into the root context for now.
+    ;; This error will be detected and reported in `ast-sanity-check`.
+    (if (< 1 (count result))
+      (apply conj (first result) (rest result))
+      (first result))))
+
+(defn ast-sanity-check [ast]
+  (doseq [node (tree-seq vector? seq ast)]
+    (when (map? (first node))
+      (let [open-tag (first node)
+            close-tag (last node)]
+        (if (not= (:section-name open-tag) (:section-name close-tag))
+          (throw (Exception. (str "Section tag \"" (get-in open-tag [:groups 0])
+                                  "\" opened on line " (:lineno open-tag)
+                                  " is never closed")))))))
+  ast)
 
 (defn ast-node->hopen-node
   [node]
@@ -298,9 +358,11 @@
 (defn parse [text]
   (as-> text $
     (retrieve-all-tags $)
-    (map assoc-tag-type $)  ;; Analyze and attach tag types
-    (fill-in-text text $)   ;; Add missing text back into the tag sequence
-    (tags->ast $)           ;; Nest structures/sections/blocks as needed
+    (map assoc-tag-type $)   ;; Analyze and attach tag types
+    (join-tag-lineno $ text) ;; Add line number info to all tags
+    (fill-in-text text $)    ;; Add missing text back into the tag sequence
+    (tags->ast $)            ;; Nest structures/sections/blocks as needed
+    (ast-sanity-check $)     ;; Do some basic error checking on the ast
 
     ;; Convert result to data hopen can execute on
     (postwalk-zipper ast-node->hopen-node (zip/vector-zip $) {:skip-root true})

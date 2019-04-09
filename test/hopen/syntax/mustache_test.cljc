@@ -134,7 +134,22 @@
                :end 101,
                :groups ["{{something}}" "something"],
                :type :var-ref,
-               :var-name "something"}])))))
+               :var-name "something"}]))))
+
+  (testing "tag lineno retrieval"
+    (let [text
+"{{#repo}}
+something goes
+here
+and there
+{{/repo}}
+"]
+      (is (= (as-> text $
+               (#'sut/retrieve-all-tags $)
+               (#'sut/join-tag-lineno $ text)))
+
+          [{:start 0, :end 9, :groups ["{{#repo}}" "#repo"], :lineno 1}
+           {:start 40, :end 49, :groups ["{{/repo}}" "/repo"], :lineno 5}]))))
 
 (deftest feature-validation
   (testing "False values or Empty lists"
@@ -246,3 +261,14 @@ No repos :(
                :groups ["{{ /  repo}}" " /  repo"],
                :type :section-close,
                :section-name "repo"}])))))
+
+(deftest error-checking
+  (testing "unclosed context detection"
+    (is (thrown-with-msg? Exception
+                          #"Section tag \"\{\{#hello\}\}\" opened on line 1 is never closed"
+                 (#'sut/render
+"{{#hello}}
+something
+{{#world}}
+"
+                               {})))))
