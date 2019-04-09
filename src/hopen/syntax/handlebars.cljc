@@ -4,6 +4,8 @@
             [clojure.zip :as z]
             [hopen.syntax.util :refer [re-quote]]
             [hopen.util :refer [throw-exception triml]]
+            [instaparse.core #?@(:clj [:refer [defparser]]
+                                 :cljs [:refer-macros [defparser]])]
             [instaparse.gll :refer [text->segment sub-sequence]]))
 
 (def default-delimiters {:open "{{", :close "}}"})
@@ -121,117 +123,116 @@
                         [[:text segments]]))
                     coll)))))
 
-(declare handlebars-args)
+(defparser handlebars-syntax-parser
+  "syntax = (partial | open-block | else | else-if | close-block | <maybe-space> root-expression) <maybe-space>
+   partial = <'>'> <space> symbol (<space> hash-param)*
+   open-block = <'#'> #'\\S+' ((<space> expression)* | each-as-args)
+   each-as-args = <space> expression <space> <'as'>
+                  <space> <'|'> <maybe-space> symbol <space> symbol <maybe-space> <'|'>
+   else = <'else'>
+   else-if = <'else'> <space> <'if'> <space> expression
+   close-block = <'/'> symbol
+   <root-expression> = value | dotted-term | fn-call
 
-(defn- handlebars-deref-expression [s]
-  {:type :deref
-   :fields (str/split s #"\.")})
+   fn-call = !keyword symbol (<space> expression)+ (<space> hash-param)*
+   hash-param = symbol <'='> expression
+   <expression> = value | dotted-term | <'('> <maybe-space> fn-call <maybe-space> <')'>
+   dotted-term = !keyword symbol (<'.'> symbol)*
+   keyword = else | boolean-value
+   <symbol> = #'[a-zA-Z_][a-zA-Z0-9_]*'
+   <value> = string-value | boolean-value | number-value
+   string-value = <'\"'> #'[^\"]*' <'\"'>
+   boolean-value = 'true' | 'false'
+   number-value = #'\\-?[0-9]+'
+   space = #'\\s+'
+   maybe-space = #'\\s*'"
+  :output-format :enlive)
 
-(defn- handlebars-expression-group [s]
-  (let [[_ part0 next-parts] (re-matches #"\s*(\S+)\s*(.*)" s)]
-    (if (str/blank? next-parts)
-      (handlebars-deref-expression part0)
-      {:type :call
-       :func part0
-       :args (handlebars-args next-parts)})))
-
-(comment
-  (handlebars-expression-group "aa.bb")
-  (handlebars-expression-group "aa bb.cc dd.ee.ff"))
-
-;; TODO: support hash arguments.
-(defn- handlebars-args [s]
-  ;; TODO: support recursive parenthesis grouping.
-  (let [args (->> (str/split (str/trim s) #"\s+")
-                  (remove str/blank?))]
-    (mapv handlebars-expression-group args)))
-
-;; TODO: being robust to multiline expressions.
-;; TODO: partial templates.
-;; TODO: support Handlebars' special syntax of the #each block.
 (defn- handlebars-node
   "Returns a handlebars node from an element of the segment partition."
   [[type segment]]
   (case type
-    :text {:type :text
-           :value (apply str (map str segment))}
-    :syntax (if-let [[_ block-name exprs] (re-matches #"\#(\S+)\s*(.*)" segment)]
-              {:type (keyword block-name)
-               :open-block? true
-               :args (handlebars-args exprs)}
-
-              (if (re-matches #"else\s*" segment)
-                {:type :else}
-
-                (if-let [[_ exprs] (re-matches #"else\s+if\s+(.*)" segment)]
-                  {:type :else-if
-                   :args (handlebars-args exprs)}
-
-                  (if-let [[_ block-name] (re-matches #"/(\S+)\s*" segment)]
-                    {:type (keyword block-name)
-                     :close-block? true}
-
-                    (handlebars-expression-group segment)))))))
+    :text {:tag :text, :content (list (apply str segment))}
+    :syntax (-> (handlebars-syntax-parser (str segment)) :content first)))
 
 (defn- handlebars-zipper
-  ([] (handlebars-zipper {:type :root, :branch? true}))
-  ([root] (z/zipper :branch?
+  ([] (handlebars-zipper {:tag :root}))
+  ([root] (z/zipper (comp #{:root :open-block} :tag)                           ; branch?
                     :children
-                    (fn [node children] ; make-node
-                      (assoc node :children (vec children)))
+                    (fn [node children] (assoc node :children (vec children))) ; make-node
                     root)))
 
-;; TODO: check if the closing block matches the opening block.
-;; TODO: handle the error when no opening block is found.
+(defn- children->then [node]
+  (assert (not (:then node)) "There are multiple `else` for the same `if`.")
+  (rename-keys node {:children :then}))
+
+(defn- find-opening-block [zipper closing-node]
+  (let [closing-block-name (-> closing-node :content first)]
+    (some (fn [z]
+            (assert (some? z) "No opening block found.")
+            (let [node (z/node z)]
+              (when (and (= (:tag node) :open-block)
+                         (not (:does-not-close-blocks node)))
+                (assert (= (-> node :content first) closing-block-name)
+                        "The closing block does not match the opening block.")
+                z)))
+          (iterate z/up zipper))))
+
 (defn- handlebars-zipper-reducer
   "Builds a tree-shaped representation of the handlebar's nodes."
   ([] (handlebars-zipper))
   ([zipper] zipper)
   ([zipper node]
-   (cond
-     (:open-block? node) (-> zipper
-                             (z/append-child (assoc node :branch? true))
-                             (z/down)
-                             (z/rightmost))
-     (= (:type node) :else) (-> zipper
-                                (z/edit assoc :type :if-then-else)
-                                (z/edit rename-keys {:children :then}))
-     (= (:type node) :else-if) (-> zipper
-                                (z/edit assoc :type :if-then-else)
-                                (z/edit rename-keys {:children :then})
-                                (z/append-child (assoc node
-                                                  :type :if
-                                                  :branch? true))
-                                (z/down))
-     (:close-block? node) (-> (some #(when (:open-block? (z/node %)) %)
-                                    (iterate z/up zipper))
-                              (z/edit dissoc :open-block?)
-                              z/up)
-     :else (z/append-child zipper node))))
+   (case (:tag node)
+     :open-block  (-> zipper
+                      (z/append-child node)
+                      (z/down)
+                      (z/rightmost))
+     :else        (-> zipper
+                      (z/edit children->then))
+     :else-if     (-> zipper
+                      (z/edit children->then)
+                      (z/append-child (-> node
+                                          (assoc :tag :open-block
+                                                 :does-not-close-blocks true)
+                                          (update :content conj "if")))
+                      (z/down))
+     :close-block (-> zipper
+                      (find-opening-block node)
+                      z/up)
+     (z/append-child zipper node))))
 
 ;; TODO: support the `..`
 (defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
   [node]
-  (case (:type node)
-    :root (mapv to-data-template (:children node))
-    :text (:value node)
-    :call (let [{:keys [func args]} node]
-            (list* (symbol func) (map to-data-template args)))
-    :deref (let [[field0 & next-fields :as fields] (:fields node)]
-             (if (nil? next-fields)
-               (list 'hopen/ctx (keyword field0))
-               (list 'get-in 'hopen/ctx (mapv keyword fields))))
-    :if (list 'b/if (to-data-template (-> node :args first))
-              (mapv to-data-template (:children node)))
-    :if-then-else (list 'b/if (to-data-template (-> node :args first))
-                        (mapv to-data-template (:then node))
-                        (mapv to-data-template (:children node)))
-    :with (list 'b/let ['hopen/ctx (to-data-template (-> node :args first))]
-                (mapv to-data-template (:children node)))
-    :each (list 'b/for ['hopen/ctx (to-data-template (-> node :args first))]
-                (mapv to-data-template (:children node)))
-    ["Unhandled:" node]))
+  (let [{:keys [tag content children]} node
+        [arg0] content]
+    (case tag
+      :root (mapv to-data-template children)
+      (:text :string-value) arg0
+      (:boolean-value :number-value) (read-string arg0)
+      :fn-call (let [[func & args] content]
+                 (list* (symbol func) (map to-data-template args)))
+      :dotted-term (if (= (count content) 1)
+                     (list 'hopen/ctx (keyword arg0))
+                     (list 'get-in 'hopen/ctx (mapv keyword content)))
+      :open-block
+      (let [[block-name arg0] content]
+        (case block-name
+          "if"   (if-let [then (seq (:then node))]
+                   (list 'b/if (to-data-template arg0)
+                         (mapv to-data-template then)
+                         (mapv to-data-template children))
+                   (list 'b/if (to-data-template arg0)
+                         (mapv to-data-template children)))
+          "with" (list 'b/let ['hopen/ctx (to-data-template arg0)]
+                       (mapv to-data-template children))
+          "each" (if (= (:tag arg0) :each-as-args)
+                   ["Unhandled each-as:" node]
+                   (list 'b/for ['hopen/ctx (to-data-template arg0)]
+                         (mapv to-data-template children)))))
+      ["Unhandled:" node])))
 
 (defn parse [template]
   (-> (transduce (comp (template-partition default-delimiters)
@@ -242,22 +243,3 @@
                  [template])
       z/root
       to-data-template))
-
-
-(comment
-  ;; The Handlebars' syntax:
-
-  "! this is a comment"
-  "!-- this is a comment --"
-
-  "#each movie.staffs"
-  "/each"
-
-  "#if movie"
-  "else if person"
-  "else"
-  "/if"
-
-  "full-name-helper person arg1=val1 arg2=val2 ..."
-
-  "> sub-template var1=val1 var2=val2 ...")
