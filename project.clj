@@ -28,4 +28,5 @@
                         :optimizations :none
                         :pretty-print false}}]}
   :doo {:alias {:browsers [:chrome :firefox]}
-        :paths {:karma "./node_modules/karma/bin/karma"}})
+        :paths {:karma "./node_modules/karma/bin/karma"}}
+  :profiles {:dev {:dependencies [[pjstadig/humane-test-output "0.8.2"]]}})

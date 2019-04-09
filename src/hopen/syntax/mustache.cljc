@@ -1,29 +1,53 @@
 (ns hopen.syntax.mustache
-  #?(:clj (:import [java.util.regex Pattern]))
   (:require [clojure.string :as str]
             [hopen.syntax.util :as util]
             [clojure.zip :as zip]
             [clojure.walk :as walk]
-            [backtick]
+            [backtick.core :as backtick]
             [better-cond.core :as b]))
 
 ;;------------------------------------------------------------------------------
 ;; General utilities
 ;;------------------------------------------------------------------------------
 
-;; TODO!!! Provide a js implementation
 (defn re-seq-pos
   "Returns a lazy sequence of regex matches like `re-seq`, but also returns the offsets of
   the groups/captures."
   [pattern string]
-  (let [m (re-matcher pattern string)]
-    ((fn step []
-       (when (. m find)
-         (cons {:start (.start m)
-                :end (.end m)
-                :groups (into [] (for [g (range (inc (.groupCount m)))]
-                                   (.group m g)))}
-               (lazy-seq (step))))))))
+  #?(:clj
+     (let [m (re-matcher pattern string)]
+       ((fn step []
+          (when (. m find)
+            (cons {:start (.start m)
+                   :end (.end m)
+                   :groups (into [] (for [g (range (inc (.groupCount m)))]
+                                      (.group m g)))}
+                  (lazy-seq (step)))))))
+
+     :cljs
+     ;; It'd be really nice if we can just use the global flag for the js regex
+     ;; However, https://dev.clojure.org/jira/browse/CLJS-150 (from 2014) suggets that
+     ;; it makes use of some global state, which may mess up the result.
+     ;;
+     ;; This is an altered version of cljs' re-seq.
+     (letfn [(re-seq-pos* [re s current-offset]
+               (when-some [matches (.exec re s)]
+                 (let [match-str (aget matches 0)
+                       start (+ current-offset (.-index matches))
+                       end (+ start (count match-str))]
+                   (cons {:start start
+                          :end end
+                          :groups (if (== (.-length matches) 1)
+                                    match-str
+                                    (vec matches))}
+                         (lazy-seq
+                          (let [post-idx (+ (.-index matches)
+                                            (max 1 (.-length match-str)))]
+                            (when (<= post-idx (.-length s))
+                              (re-seq-pos* re (subs s post-idx) (+ current-offset post-idx)))))))))]
+     (if (string? string)
+         (re-seq-pos* pattern string 0)
+         (throw (js/TypeError. "re-seq-pos must match against a string."))))))
 
 (defn conj-last
   "Conj `x` into the last element of the `coll`.
@@ -49,11 +73,18 @@
 ;;------------------------------------------------------------------------------
 
 (defn- compile-regex [start-delim end-delim]
-  (re-pattern
-   (str
-    (util/re-quote start-delim)
-    "(.*)"
-    (util/re-quote end-delim))))
+  (if (and (= start-delim "{{")
+           (= end-delim "}}"))
+    #"\{\{\{(.*?)\}\}\}|\{\{(.*?)\}\}"
+    (re-pattern
+     (str
+      (util/re-quote start-delim)
+      "\\{(.*?)\\}"
+      (util/re-quote start-delim)
+      "|"
+      (util/re-quote start-delim)
+      "(.*?)"
+      (util/re-quote end-delim)))))
 
 (defn- parse-delim-change-tag
   "Try to parse the tag-text as a delimiter change command.
@@ -93,14 +124,28 @@
             ;; Collect all tags that do not denote delim change.
             ;; When we do find a delim change, stop further processing.
             possible-tags (->> (re-seq-pos regex (subs text offset))
+
+                               ;; Extract the captured contents of the tag
+                               (map (fn [tag]
+                                      (if (get-in tag [:groups 2])
+                                        (assoc tag :content (get-in tag [:groups 2]))
+                                        (assoc tag
+                                               :content (get-in tag [:groups 1])
+                                               :escape true))))
+
+                               ;; Tag delim changes with a specific type tag
+                               ;; We'll use this later to decide if we need continue processing
+                               ;; with another set of delimiters.
                                (reduce (fn [accum tag]
-                                         (let [delims (parse-delim-change-tag (tag--text tag))]
+                                         (let [delims (parse-delim-change-tag (:content tag))]
                                            (if delims
                                              (reduced (conj accum (assoc tag
                                                                          :delims delims
                                                                          :type :delim-change)))
                                              (conj accum tag))))
                                        [])
+
+                               ;; Account for the current offset
                                (update-tags-with-offset offset))]
 
         ;; If we did not encounter a delim change tag...
@@ -163,7 +208,7 @@
     tag  ;; don't alter tags with types already assigned
 
     ;; No type has been assigned yet...
-    (let [text (tag--text tag)]
+    (let [text (:content tag)]
       (b/cond
         ;; Does the text look like some kind of section tag??
         :let [parsed-tag (re-matches #"^\s*([\#\/\^\>])\s*([a-zA-Z0-9\?-]+)" text)]
@@ -172,7 +217,7 @@
                                   (= "/" (second parsed-tag)) (assoc tag :type :section-close)
                                   (= "^" (second parsed-tag)) (assoc tag :type :inverted-open)
                                   (= ">" (second parsed-tag)) (assoc tag :type :partial)
-                                  :else (throw (Exception. (str "Unhandled section tag encountered: " text))))
+                                  :else (throw (ex-info (str "Unhandled section tag encountered: " text) {})))
                                (assoc :section-name (nth parsed-tag 2)))
 
         ;; Does it look like a comment?
@@ -188,7 +233,7 @@
         ;; We don't really know what we're looking at.
         ;; Report something has gone wrong.
         :else
-        (throw (Exception. (str "Invalid tag: " text)))))))
+        (throw (ex-info (str "Invalid tag: " text) {}))))))
 
 (defn- discard-first-newline [s]
   (cond
@@ -274,9 +319,9 @@
       (let [open-tag (first node)
             close-tag (last node)]
         (if (not= (:section-name open-tag) (:section-name close-tag))
-          (throw (Exception. (str "Section tag \"" (get-in open-tag [:groups 0])
-                                  "\" opened on line " (:lineno open-tag)
-                                  " is never closed")))))))
+          (throw (ex-info (str "Section tag \"" (get-in open-tag [:groups 0])
+                               "\" opened on line " (:lineno open-tag)
+                               " is never closed") {}))))))
   ast)
 
 (defn ast-node->hopen-node
@@ -293,7 +338,7 @@
                   (= :comment (:type node)) nil
                   (= :partial (:type node)) nil
                   (= :delim-change (:type node)) nil
-                  :else (throw (Exception. (str "Does not how how to deal with tags of type: " (:type node)))))
+                  :else (throw (ex-info (str "Does not how how to deal with tags of type: " (:type node)) {})))
 
     (vector? node)
     (cond
@@ -379,9 +424,3 @@
    env
    {:inline-macro {'ctx-lookup ctx-lookup}
     :bindings {'mustache/ctx [data-root]}}))
-
-(defn- render [template data]
-  (let [data-template (parse template)]
-    (->> (into [] (#'hopen.renderer.xf/renderer data-template (init-env hopen.renderer.xf/default-env data))
-               [data])
-         (apply str))))
