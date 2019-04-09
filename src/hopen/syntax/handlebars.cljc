@@ -1,5 +1,6 @@
 (ns hopen.syntax.handlebars
-  (:require [clojure.string :as str]
+  (:require [clojure.set :refer [rename-keys]]
+            [clojure.string :as str]
             [clojure.zip :as z]
             [hopen.syntax.util :refer [re-quote]]
             [hopen.util :refer [throw-exception triml]]
@@ -148,21 +149,29 @@
 ;; TODO: being robust to multiline expressions.
 ;; TODO: partial templates.
 ;; TODO: support Handlebars' special syntax of the #each block.
-;; TODO: support `else` and chaining conditionals.
 (defn- handlebars-node
   "Returns a handlebars node from an element of the segment partition."
   [[type segment]]
   (case type
     :text {:type :text
            :value (apply str (map str segment))}
-    :syntax (if-let [[_ block-name exprs] (re-find #"^\#(\S+)\s*(.*)" segment)]
+    :syntax (if-let [[_ block-name exprs] (re-matches #"\#(\S+)\s*(.*)" segment)]
               {:type (keyword block-name)
                :open-block? true
                :args (handlebars-args exprs)}
-              (if-let [[_ block-name] (re-find #"^\/(\S+)" segment)]
-                {:type (keyword block-name)
-                 :close-block? true}
-                (handlebars-expression-group segment)))))
+
+              (if (re-matches #"else\s*" segment)
+                {:type :else}
+
+                (if-let [[_ exprs] (re-matches #"else\s+if\s+(.*)" segment)]
+                  {:type :else-if
+                   :args (handlebars-args exprs)}
+
+                  (if-let [[_ block-name] (re-matches #"/(\S+)\s*" segment)]
+                    {:type (keyword block-name)
+                     :close-block? true}
+
+                    (handlebars-expression-group segment)))))))
 
 (defn- handlebars-zipper
   ([] (handlebars-zipper {:type :root, :branch? true}))
@@ -172,6 +181,8 @@
                       (assoc node :children (vec children)))
                     root)))
 
+;; TODO: check if the closing block matches the opening block.
+;; TODO: handle the error when no opening block is found.
 (defn- handlebars-zipper-reducer
   "Builds a tree-shaped representation of the handlebar's nodes."
   ([] (handlebars-zipper))
@@ -179,12 +190,23 @@
   ([zipper node]
    (cond
      (:open-block? node) (-> zipper
-                             (z/append-child (-> node
-                                                 (dissoc :open-block?)
-                                                 (assoc :branch? true)))
+                             (z/append-child (assoc node :branch? true))
                              (z/down)
                              (z/rightmost))
-     (:close-block? node) (z/up zipper)
+     (= (:type node) :else) (-> zipper
+                                (z/edit assoc :type :if-then-else)
+                                (z/edit rename-keys {:children :then}))
+     (= (:type node) :else-if) (-> zipper
+                                (z/edit assoc :type :if-then-else)
+                                (z/edit rename-keys {:children :then})
+                                (z/append-child (assoc node
+                                                  :type :if
+                                                  :branch? true))
+                                (z/down))
+     (:close-block? node) (-> (some #(when (:open-block? (z/node %)) %)
+                                    (iterate z/up zipper))
+                              (z/edit dissoc :open-block?)
+                              z/up)
      :else (z/append-child zipper node))))
 
 ;; TODO: support the `..`
@@ -202,6 +224,9 @@
                (list 'get-in 'hopen/ctx (mapv keyword fields))))
     :if (list 'b/if (to-data-template (-> node :args first))
               (mapv to-data-template (:children node)))
+    :if-then-else (list 'b/if (to-data-template (-> node :args first))
+                        (mapv to-data-template (:then node))
+                        (mapv to-data-template (:children node)))
     :with (list 'b/let ['hopen/ctx (to-data-template (-> node :args first))]
                 (mapv to-data-template (:children node)))
     :each (list 'b/for ['hopen/ctx (to-data-template (-> node :args first))]

@@ -120,20 +120,35 @@
       ;       (get-in hopen/ctx [:a :b])
       ;       {:c d, :e f})]
 
-      "{{#if a.b}}c{{/if}}"
-      '[(b/if (get-in hopen/ctx [:a :b])
-          ["c"])]
+      "a{{#if b}}c{{/if}}d"
+      '["a"
+        (b/if (hopen/ctx :b)
+          ["c"])
+        "d"]
 
-      ;"{{#if a.b}}c{{else}}d{{/if}}"
-      ;'[(b/if (get-in hopen/ctx [:a :b])
-      ;    ["c"]
-      ;    ["d"])]
-      ;
-      ;"{{#if a.b}}c{{else if d}}e{{/if}}"
-      ;'[(b/if (get-in hopen/ctx [:a :b])
-      ;    ["c"]
-      ;    [(b/if (hopen/ctx :d)
-      ;       ["e"])])]
+      "a{{#if b}}c{{else}}d{{/if}}e"
+      '["a"
+        (b/if (hopen/ctx :b)
+          ["c"]
+          ["d"])
+        "e"]
+
+      "a{{#if b}}c{{else if d}}e{{/if}}f"
+      '["a"
+        (b/if (hopen/ctx :b)
+          ["c"]
+          [(b/if (hopen/ctx :d)
+             ["e"])])
+        "f"]
+
+      "a{{#if b}}c{{else if d}}e{{else}}f{{/if}}g"
+      '["a"
+        (b/if (hopen/ctx :b)
+          ["c"]
+          [(b/if (hopen/ctx :d)
+             ["e"]
+             ["f"])])
+        "g"]
 
       "{{#each a.b}}c{{/each}}"
       '[(b/for [hopen/ctx (get-in hopen/ctx [:a :b])]
