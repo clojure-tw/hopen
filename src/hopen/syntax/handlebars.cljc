@@ -35,9 +35,7 @@
          open-delim open-delim
          close-delim close-delim]
     (if-let [index (str/index-of segment open-delim)]
-      (let [text-segments (if (zero? index)
-                            text-segments
-                            (conj text-segments (sub-sequence segment 0 index)))
+      (let [text-segments (conj text-segments (sub-sequence segment 0 index))
             syntax-segment (sub-sequence segment (+ index (count open-delim)))]
         ;; Is it a change-delimiter tag?
         (if-let [change-delimiters (parse-change-delim syntax-segment close-delim)]
@@ -50,9 +48,7 @@
           ;; No it's a syntax segment, so we are done parsing text segments.
           [text-segments syntax-segment open-delim close-delim]))
       ;; The whole remaining text is the text segment, we are done.
-      [(if (zero? (count segment))
-         text-segments
-         (conj text-segments segment))
+      [(conj text-segments segment)
        nil
        open-delim
        close-delim])))
@@ -68,7 +64,7 @@
      (sub-sequence segment (+ index (count close-delim)))]
     (throw-exception close-delim-not-found-msg)))
 
-(defn template-partition [delimiters]
+(defn- template-partition [delimiters]
   (fn [rf]
     (fn
       ([] (rf))
@@ -95,6 +91,26 @@
              ;; No more segments to read.
              result)))))))
 
+(defn- handlebars-comment? [[type segment]]
+  (and (= type :syntax)
+       (or (re-matches #"(?s)\!\s+(.*)\s+" segment)
+           (re-matches #"(?s)\!\-\-\s+(.*)\s+\-\-" segment))))
+
+;; Regroups together the text segments,
+;; removes blank texts,
+;; removes empty text segments.
+(def ^:private cleanup-text-segments
+  (comp (partition-by first)
+        (mapcat (fn [[[type] :as coll]]
+                  (if (= type :text)
+                    (let [segments (into []
+                                         (comp (mapcat second)
+                                               (remove str/blank?))
+                                         coll)]
+                      (when (seq segments)
+                        [[:text segments]]))
+                    coll)))))
+
 (declare handlebars-args)
 
 (defn- handlebars-deref-expression [s]
@@ -120,11 +136,10 @@
                   (remove str/blank?))]
     (mapv handlebars-expression-group args)))
 
-;; TODO: support comments.
 ;; TODO: partial templates.
 ;; TODO: support Handlebars' special syntax of the #each block.
 ;; TODO: support `else` and chaining conditionals.
-(defn handlebars-node
+(defn- handlebars-node
   "Returns a handlebars node from an element of the segment partition."
   [[type segment]]
   (case type
@@ -139,7 +154,7 @@
                  :close-block? true}
                 (handlebars-expression-group segment)))))
 
-(defn handlebars-zipper
+(defn- handlebars-zipper
   ([] (handlebars-zipper {:type :root, :branch? true}))
   ([root] (z/zipper :branch?
                     :children
@@ -147,7 +162,7 @@
                       (assoc node :children (vec children)))
                     root)))
 
-(defn handlebars-zipper-reducer
+(defn- handlebars-zipper-reducer
   "Builds a tree-shaped representation of the handlebar's nodes."
   ([] (handlebars-zipper))
   ([zipper] zipper)
@@ -163,7 +178,7 @@
      :else (z/append-child zipper node))))
 
 ;; TODO: support the `..`
-(defn to-data-template
+(defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
   [node]
   (case (:type node)
@@ -185,6 +200,8 @@
 
 (defn parse [template]
   (-> (transduce (comp (template-partition default-delimiters)
+                       (remove handlebars-comment?)
+                       cleanup-text-segments
                        (map handlebars-node))
                  handlebars-zipper-reducer
                  [template])

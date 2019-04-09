@@ -6,6 +6,15 @@
             [hopen.syntax.handlebars :as hb :refer [parse]]
             [instaparse.gll :refer [text->segment]]))
 
+(deftest re-matches-test
+  (testing "Check that some edge cases on regexp are consistent across the platforms."
+    (are [re s]
+      (re-matches re s)
+
+      #"(?s)\!\s+(.*)\s+" "! blabla "
+      #"(?s)\!\s+(.*)\s+" "! bla\nbla "
+      #"(?s)\!\s+(.*)\s+" "!\nbla\nbla\n")))
+
 (deftest parse-change-delim-test
   (is (= (#'hb/parse-change-delim "= < > =}}blah blah" "}}")
          ["= < > =}}" "<" ">"])))
@@ -21,10 +30,10 @@
          (tx expected-result))
 
       ""
-      [[] nil "{{" "}}"]
+      [[""] nil "{{" "}}"]
 
       "{{ aa }} bb"
-      [[] " aa }} bb" "{{" "}}"]
+      [[""] " aa }} bb" "{{" "}}"]
 
       "aa {{ bb }} cc"
       [["aa "] " bb }} cc" "{{" "}}"]
@@ -85,11 +94,17 @@
       "aa {{= < > =}} bb"
       ["aa  bb"]
 
-      ;"aa {{! blabla }} bb"
-      ;["aa  bb"]
-      ;
-      ;"aa {{!-- bla\nbla --}} bb"
-      ;["aa  bb"]
+      "aa {{! blabla }} bb"
+      ["aa  bb"]
+
+      "aa {{! bla\nbla }} bb"
+      ["aa  bb"]
+
+      "aa {{!-- blabla --}} bb"
+      ["aa  bb"]
+
+      "aa {{!-- bla\nbla --}} bb"
+      ["aa  bb"]
 
       "aa {{= | | =}} bb |cc.dd.ee| ff"
       '["aa  bb " (get-in hopen/ctx [:cc :dd :ee]) " ff"]
