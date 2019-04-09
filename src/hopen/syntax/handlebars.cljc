@@ -96,6 +96,15 @@
        (or (re-matches #"(?s)\!\s+(.*)\s+" segment)
            (re-matches #"(?s)\!\-\-\s+(.*)\s+\-\-" segment))))
 
+;; TODO: support line characters removal.
+(def ^:private remove-killed-line-parts
+  (fn [rf]
+    (fn
+      ([] (rf))
+      ([result] (rf result))
+      ([result input]
+       (rf result input)))))
+
 ;; Regroups together the text segments,
 ;; removes blank texts,
 ;; removes empty text segments.
@@ -136,6 +145,7 @@
                   (remove str/blank?))]
     (mapv handlebars-expression-group args)))
 
+;; TODO: being robust to multiline expressions.
 ;; TODO: partial templates.
 ;; TODO: support Handlebars' special syntax of the #each block.
 ;; TODO: support `else` and chaining conditionals.
