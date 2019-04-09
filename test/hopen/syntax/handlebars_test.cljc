@@ -124,13 +124,13 @@
       '[(b/for [hopen/ctx (get-in hopen/ctx [:a :b])]
           ["c"])]
 
-      ;"{{@with a}}b{{/with}}"
-      ;[(b/let [hopen/ctx (hopen/ctx :a)]
-      ;   ["b"])]
-      ;
-      ;"{{@with a.b}}c{{/with}}"
-      ;[(b/let [hopen/ctx (get-in hopen/ctx [:a :b])]
-      ;   ["c"])]
+      "{{#with a}}b{{/with}}"
+      '[(b/let [hopen/ctx (hopen/ctx :a)]
+          ["b"])]
+
+      "{{#with a.b}}c{{/with}}"
+      '[(b/let [hopen/ctx (get-in hopen/ctx [:a :b])]
+          ["c"])]
 
       "aa {{#if bb}} cc {{#each dd.dd}} ee {{/each}} ff {{/if}} gg"
       '["aa "

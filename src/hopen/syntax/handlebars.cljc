@@ -124,7 +124,6 @@
 ;; TODO: partial templates.
 ;; TODO: support Handlebars' special syntax of the #each block.
 ;; TODO: support `else` and chaining conditionals.
-;; TODO: support `with`.
 (defn handlebars-node
   "Returns a handlebars node from an element of the segment partition."
   [[type segment]]
@@ -163,6 +162,7 @@
      (:close-block? node) (z/up zipper)
      :else (z/append-child zipper node))))
 
+;; TODO: support the `..`
 (defn to-data-template
   "Generates a data-template from a handlebars tree's node."
   [node]
@@ -177,6 +177,8 @@
                (list 'get-in 'hopen/ctx (mapv keyword fields))))
     :if (list 'b/if (to-data-template (-> node :args first))
               (mapv to-data-template (:children node)))
+    :with (list 'b/let ['hopen/ctx (to-data-template (-> node :args first))]
+                (mapv to-data-template (:children node)))
     :each (list 'b/for ['hopen/ctx (to-data-template (-> node :args first))]
                 (mapv to-data-template (:children node)))
     ["Unhandled:" node]))
