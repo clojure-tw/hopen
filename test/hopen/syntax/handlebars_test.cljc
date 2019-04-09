@@ -11,9 +11,9 @@
     (are [re s]
       (re-matches re s)
 
-      #"(?s)\!\s+(.*)\s+" "! blabla "
-      #"(?s)\!\s+(.*)\s+" "! bla\nbla "
-      #"(?s)\!\s+(.*)\s+" "!\nbla\nbla\n")))
+      #"\!\s+([\s\S]*)\s" "! blabla "
+      #"\!\s+([\s\S]*)\s" "! bla\nbla "
+      #"\!\s+([\s\S]*)\s" "!\nbla\nbla\n")))
 
 (deftest parse-change-delim-test
   (is (= (#'hb/parse-change-delim "= < > =}}blah blah" "}}")

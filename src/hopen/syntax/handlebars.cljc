@@ -94,8 +94,8 @@
 
 (defn- handlebars-comment? [[type segment]]
   (and (= type :syntax)
-       (or (re-matches #"(?s)\!\s+(.*)\s+" segment)
-           (re-matches #"(?s)\!\-\-\s+(.*)\s+\-\-" segment))))
+       (or (re-matches #"\!\s+([\s\S]*)\s" segment)
+           (re-matches #"\!\-\-\s+([\s\S]*)\s\-\-" segment))))
 
 ;; TODO: support line characters removal.
 (def ^:private remove-killed-line-parts
@@ -128,7 +128,7 @@
    :fields (str/split s #"\.")})
 
 (defn- handlebars-expression-group [s]
-  (let [[_ part0 next-parts] (re-find #"\s*(\S+)\s*(.*)" s)]
+  (let [[_ part0 next-parts] (re-matches #"\s*(\S+)\s*(.*)" s)]
     (if (str/blank? next-parts)
       (handlebars-deref-expression part0)
       {:type :call
