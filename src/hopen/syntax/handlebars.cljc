@@ -107,7 +107,7 @@
        (rf result input)))))
 
 ;; Regroups together the text segments,
-;; removes blank texts,
+;; removes empty texts,
 ;; removes empty text segments.
 (def ^:private cleanup-text-segments
   (comp (partition-by first)
@@ -115,7 +115,7 @@
                   (if (= type :text)
                     (let [segments (into []
                                          (comp (mapcat second)
-                                               (remove str/blank?))
+                                               (remove empty?))
                                          coll)]
                       (when (seq segments)
                         [[:text segments]]))
