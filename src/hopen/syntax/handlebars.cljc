@@ -95,23 +95,6 @@
              ;; No more segments to read.
              result)))))))
 
-(comment
-  (into []
-        (template-partition default-delimiters)
-        [""])
-
-  (into []
-        (template-partition default-delimiters)
-        ["aa bb"])
-
-  (into []
-        (template-partition default-delimiters)
-        ["aa {{= < > =}} bb"])
-
-  (into []
-        (template-partition default-delimiters)
-        ["aa {{= | | =}} bb |cc| dd"]))
-
 (declare handlebars-args)
 
 (defn- handlebars-deref-expression [s]
@@ -137,7 +120,11 @@
                   (remove str/blank?))]
     (mapv handlebars-expression-group args)))
 
+;; TODO: support comments.
+;; TODO: partial templates.
+;; TODO: support Handlebars' special syntax of the #each block.
 ;; TODO: support `else` and chaining conditionals.
+;; TODO: support `with`.
 (defn handlebars-node
   "Returns a handlebars node from an element of the segment partition."
   [[type segment]]
@@ -204,12 +191,8 @@
 
 
 (comment
+  ;; The Handlebars' syntax:
 
-  (parse "aa {{= | | =}} bb |cc.dd.ee| ff")
-  (parse "{{aa bb}}")
-  (parse "{{aa bb.cc dd.ee.ff}}")
-  (parse "aa {{#if bb}} cc {{#each dd.dd}} ee {{/each}} ff {{/if}} gg")
-  
   "! this is a comment"
   "!-- this is a comment --"
 
