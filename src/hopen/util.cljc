@@ -43,3 +43,23 @@
 (defn throw-exception [message]
   (throw (#?(:clj  Exception.
              :cljs js/Error.) message)))
+
+(defn escape-html [text]
+  #?(:cljs
+     ;; Ripped from https://stackoverflow.com/a/9677462/605323
+     (.replace text (js/RegExp "[&<>\"']" "g") (fn [k] (aget (js-obj "&" "&amp;"
+                                                                    "<" "&lt;"
+                                                                    ">" "&gt;"
+                                                                    "\"" "&quot;"
+                                                                    "'" "&#039;")
+                                                            k)))
+     :clj
+     ;; Ripped from hiccup https://github.com/weavejester/hiccup/blob/abc97943ee0fb72e5c94f8fac170be5535f9f2d4/src/hiccup/util.clj#L80
+     ;; This seems like it would be somewhat "slow". It scans the string multiple times & each time generating a new string.
+     ;; It's probably fine for short strings.
+     (.. ^String text
+         (replace "&"  "&amp;")
+         (replace "<"  "&lt;")
+         (replace ">"  "&gt;")
+         (replace "\"" "&quot;")
+         (replace "'" "&#39;"))))

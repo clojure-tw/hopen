@@ -100,6 +100,7 @@
     'cap   str/capitalize
     'upper str/upper-case
     'lower str/lower-case
+    'escape-html util/escape-html
 
     'empty?  empty?
     'not     not}})

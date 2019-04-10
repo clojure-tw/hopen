@@ -67,7 +67,7 @@
            [{:content "name", :start 4, :end 12, :groups ["{{name}}" nil "name"]}
             {:content "age", :start 16, :end 23, :groups ["{{age}}" nil "age"]}
             {:content "company", :start 27, :end 38, :groups ["{{company}}" nil "company"]}
-            {:content "company", :escape true, :start 42, :end 55, :groups ["{{{company}}}" "company" nil]}
+            {:content "company", :skip-escape true, :start 42, :end 55, :groups ["{{{company}}}" "company" nil]}
             {:content "#person", :start 66, :end 77, :groups ["{{#person}}" nil "#person"]}
             {:content "/person", :start 95, :end 106, :groups ["{{/person}}" nil "/person"]}
             {:content "#wrapped", :start 110, :end 122, :groups ["{{#wrapped}}" nil "#wrapped"]}
@@ -188,7 +188,7 @@ and there
 
   (testing "multiple tags in single line"
     (let [text
-          "{{#repo}} something {{/repo}} {{{escape this text}}}"]
+          "{{#repo}} something {{/repo}} {{{don't escape this text}}}"]
 
       (is (= (as-> text $
                (#'sut/retrieve-all-tags $)
@@ -205,10 +205,10 @@ and there
                :content "/repo",
                :lineno 1}
               {:start 30,
-               :end 52,
-               :groups ["{{{escape this text}}}" "escape this text" nil],
-               :content "escape this text",
-               :escape true,
+               :end 58,
+               :groups ["{{{don't escape this text}}}" "don't escape this text" nil],
+               :content "don't escape this text",
+               :skip-escape true,
                :lineno 1}])))))
 
 (deftest feature-validation
@@ -291,7 +291,17 @@ No repos :(
                           :world "world"
                           :again "again"})
 
-           "* hello\n* world\n* again\n"))))
+           "* hello\n* world\n* again\n")))
+
+  (testing "String escape"
+    (is (= (render "{{text}}" {:text "<b>boldme!<b>"})
+           "&lt;b&gt;boldme!&lt;b&gt;"))
+
+    (is (= (render "{{{text}}}" {:text "<b>boldme!<b>"})
+           "<b>boldme!<b>"))
+
+    )
+  )
 
 
 (deftest better-tag-parsing

@@ -131,7 +131,7 @@
                                         (assoc tag :content (get-in tag [:groups 2]))
                                         (assoc tag
                                                :content (get-in tag [:groups 1])
-                                               :escape true))))
+                                               :skip-escape true))))
 
                                ;; Tag delim changes with a specific type tag
                                ;; We'll use this later to decide if we need continue processing
@@ -225,10 +225,14 @@
         (some? (re-find #"^\s*\!" text)) (assoc tag :type :comment)
 
         ;; Does the text look like some kind of variable name?
-        :let [var-name-match (re-matches #"^\s*([a-zA-Z0-9\?-]+)\s*" text)]
-        (some? var-name-match) (assoc tag
-                                      :type :var-ref
-                                      :var-name (second var-name-match))
+        :let [var-name-match (re-matches #"^\s*(&?)\s*([a-zA-Z0-9\?-]+)\s*" text)]
+        (some? var-name-match) (cond-> tag
+                                 (not (empty? (second var-name-match)))
+                                 (assoc :skip-escape (some? (second var-name-match)))
+
+                                 :then
+                                 (assoc :type :var-ref
+                                        :var-name (nth var-name-match 2)))
 
         ;; We don't really know what we're looking at.
         ;; Report something has gone wrong.
@@ -332,7 +336,11 @@
     (map? node) (cond
                   (= :section-open (:type node)) node
                   (= :var-ref (:type node))
-                  (list 'ctx-lookup (keyword (:var-name node)))
+                  (if (:skip-escape node)
+                    (backtick/template
+                     (ctx-lookup ~(keyword (:var-name node))))
+                    (backtick/template
+                     (escape-html (ctx-lookup ~(keyword (:var-name node))))))
                   (= :section-close (:type node)) node
                   (= :inverted-open (:type node)) node
                   (= :comment (:type node)) nil
