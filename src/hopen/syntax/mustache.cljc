@@ -89,7 +89,7 @@
   "Try to parse the tag-text as a delimiter change command.
   Returns '(start-delim end-delim) or nil."
   [tag-text]
-  (let [result (re-matches #"=(.*)\s+(.*)=" tag-text)]
+  (let [result (re-matches #"=(\S*)\s+(\S*)=" tag-text)]
     (when (= 3 (count result))
       (drop 1 result))))
 
