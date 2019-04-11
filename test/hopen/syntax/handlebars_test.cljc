@@ -109,12 +109,21 @@
       "aa {{= | | =}} bb |cc.dd.ee| ff"
       '["aa  bb " (get-in hopen/ctx [:cc :dd :ee]) " ff"]
 
+      "{{false}}{{true}}"
+      [false true]
+
+      "{{0}}{{3}}{{-0}}{{-3}}"
+      [0 3 -0 -3]
+
+      "{{ \"some text\" }}"
+      ["some text"]
+
       "{{foo bar a.b}}"
       '[(foo (hopen/ctx :bar) (get-in hopen/ctx [:a :b]))]
 
-      ;"{{foo bar (a b.c)}}"
-      ;'[(foo (hopen/ctx :bar) (a (hopen/ctx [:b :c])))]
-      ;
+      "{{foo bar (a b.c)}}"
+      '[(foo (hopen/ctx :bar) (a (get-in hopen/ctx [:b :c])))]
+
       ;"{{foo bar a.b c=d e=f}}"
       ;'[(foo (hopen/ctx :bar)
       ;       (get-in hopen/ctx [:a :b])

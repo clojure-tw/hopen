@@ -172,7 +172,7 @@
             (assert (some? z) "No opening block found.")
             (let [node (z/node z)]
               (when (and (= (:tag node) :open-block)
-                         (not (:does-not-close-blocks node)))
+                         (not (:did-not-open-a-block node)))
                 (assert (= (-> node :content first) closing-block-name)
                         "The closing block does not match the opening block.")
                 z)))
@@ -194,7 +194,7 @@
                       (z/edit children->then)
                       (z/append-child (-> node
                                           (assoc :tag :open-block
-                                                 :does-not-close-blocks true)
+                                                 :did-not-open-a-block true)
                                           (update :content conj "if")))
                       (z/down))
      :close-block (-> zipper
