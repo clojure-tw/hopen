@@ -2,7 +2,6 @@
   (:require [clojure.string :as str]
             [hopen.syntax.util :as util]
             [clojure.zip :as zip]
-            [clojure.walk :as walk]
             [backtick.core :as backtick]
             [better-cond.core :as b]))
 
@@ -93,9 +92,6 @@
   (let [result (re-matches #"=(.*)\s+(.*)=" tag-text)]
     (when (= 3 (count result))
       (drop 1 result))))
-
-(defn- tag--text [tag]
-  (get-in tag [:groups 1]))
 
 (defn- retrieve-all-tags
   "Retrieve a list of all tags and their offsets.
@@ -212,12 +208,13 @@
       (b/cond
         ;; Does the text look like some kind of section tag??
         :let [parsed-tag (re-matches #"^\s*([\#\/\^\>])\s*([a-zA-Z0-9\?-]+)" text)]
-        (some? parsed-tag) (-> (cond
-                                  (= "#" (second parsed-tag)) (assoc tag :type :section-open)
-                                  (= "/" (second parsed-tag)) (assoc tag :type :section-close)
-                                  (= "^" (second parsed-tag)) (assoc tag :type :inverted-open)
-                                  (= ">" (second parsed-tag)) (assoc tag :type :partial)
-                                  :else (throw (ex-info (str "Unhandled section tag encountered: " text) {})))
+        (some? parsed-tag) (-> (case (second parsed-tag)
+                                 "#" (assoc tag :type :section-open)
+                                 "/" (assoc tag :type :section-close)
+                                 "^" (assoc tag :type :inverted-open)
+                                 ">" (assoc tag :type :partial)
+
+                                 (throw (ex-info (str "Unhandled section tag encountered: " text) {})))
                                (assoc :section-name (nth parsed-tag 2)))
 
         ;; Does it look like a comment?
@@ -333,53 +330,53 @@
 
   (cond
     (string? node) node
-    (map? node) (cond
-                  (= :section-open (:type node)) node
-                  (= :var-ref (:type node))
-                  (if (:skip-escape node)
-                    (backtick/template
-                     (ctx-lookup ~(keyword (:var-name node))))
-                    (backtick/template
-                     (escape-html (ctx-lookup ~(keyword (:var-name node))))))
-                  (= :section-close (:type node)) node
-                  (= :inverted-open (:type node)) node
-                  (= :comment (:type node)) nil
-                  (= :partial (:type node)) nil
-                  (= :delim-change (:type node)) nil
-                  :else (throw (ex-info (str "Does not how how to deal with tags of type: " (:type node)) {})))
+    (map? node) (case (:type node)
+                  :section-open node
+                  :var-ref  (if (:skip-escape node)
+                              (backtick/template
+                               (ctx-lookup ~(keyword (:var-name node))))
+                              (backtick/template
+                               (escape-html (ctx-lookup ~(keyword (:var-name node))))))
+                  :section-close node
+                  :inverted-open node
+                  :comment nil
+                  :partial nil
+                  :delim-change nil
+
+                  (throw (ex-info (str "Does not how how to deal with tags of type: " (:type node)) {})))
 
     (vector? node)
-    (cond
-      (= :section-open (:type (first node))) (let [contents (->> node
-                                                                 (drop 1)
-                                                                 (drop-last 1)
-                                                                 (into []))]
-                                               (backtick/template
-                                                (b/let [data (ctx-lookup ~(keyword (:section-name (first node))))]
-                                                  [(b/if (and data
-                                                              (not (empty? data)))
-                                                     [(b/if (or (list? data)
-                                                                (vector? data))
+    (case (:type (first node))
+      :section-open  (let [contents (->> node
+                                         (drop 1)
+                                         (drop-last 1)
+                                         (into []))]
+                       (backtick/template
+                        (b/let [data (ctx-lookup ~(keyword (:section-name (first node))))]
+                          [(b/if (and data
+                                      (not (empty? data)))
+                             [(b/if (or (list? data)
+                                        (vector? data))
 
-                                                        ;; Looks like the context might have multiple items
-                                                        [(b/for [ctx data]
-                                                           [(b/let [mustache/ctx (conj mustache/ctx ctx)]
-                                                              ~contents)])]
+                                ;; Looks like the context might have multiple items
+                                [(b/for [ctx data]
+                                   [(b/let [mustache/ctx (conj mustache/ctx ctx)]
+                                      ~contents)])]
 
-                                                        ;; New context only has a single item
-                                                        [(b/let [mustache/ctx (conj mustache/ctx data)]
-                                                           ~contents)])])])))
+                                ;; New context only has a single item
+                                [(b/let [mustache/ctx (conj mustache/ctx data)]
+                                   ~contents)])])])))
 
-      (= :inverted-open (:type (first node))) (backtick/template
-                                               (b/let [data (ctx-lookup ~(keyword (:section-name (first node))))]
-                                                 [(b/if (or (= data nil)
-                                                            (empty? data))
-                                                    ~(->> node
-                                                          (drop 1)
-                                                          (drop-last 1)
-                                                          (into [])))])))))
+      :inverted-open  (backtick/template
+                       (b/let [data (ctx-lookup ~(keyword (:section-name (first node))))]
+                         [(b/if (or (= data nil)
+                                    (empty? data))
+                            ~(->> node
+                                  (drop 1)
+                                  (drop-last 1)
+                                  (into [])))])))))
 
-(defn postwalk-zipper [f loc opts]
+(defn postwalk-zipper [loc f opts]
   (let [;; Locate a single node to modify
         loc (if-some [;; try to step into the first child
                       loc (zip/down loc)]
@@ -388,7 +385,7 @@
               (loop [loc loc]
 
                 ;; Recursively visit & map/mutate the child node.
-                (let [loc (postwalk-zipper f loc opts)]
+                (let [loc (postwalk-zipper loc f opts)]
 
                   ;; If there are more child nodes, keep processing...
                   (if-some [loc (zip/right loc)]
@@ -404,9 +401,9 @@
 
     ;; map/mutate the node
     (if (and (:skip-root opts)
-             (not (some? (zip/up loc))))
+             (nil? (zip/up loc)))
       loc
-      (zip/replace loc (f (zip/node loc))))))
+      (zip/edit loc f))))
 
 (defn parse [text]
   (as-> text $
@@ -418,7 +415,7 @@
     (ast-sanity-check $)     ;; Do some basic error checking on the ast
 
     ;; Convert result to data hopen can execute on
-    (postwalk-zipper ast-node->hopen-node (zip/vector-zip $) {:skip-root true})
+    (postwalk-zipper (zip/vector-zip $) ast-node->hopen-node {:skip-root true})
     (zip/root $)))
 
 
