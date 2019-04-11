@@ -125,7 +125,7 @@
 
 (defparser handlebars-syntax-parser
   "syntax = (partial | open-block | else | else-if | close-block | <maybe-space> root-expression) <maybe-space>
-   partial = <'>'> <space> symbol (<space> hash-param)*
+   partial = <'>'> <space> symbol hash-params?
    open-block = <'#'> #'\\S+' ((<space> expression)* | each-as-args)
    each-as-args = <space> expression <space> <'as'>
                   <space> <'|'> <maybe-space> symbol <space> symbol <maybe-space> <'|'>
@@ -134,8 +134,8 @@
    close-block = <'/'> symbol
    <root-expression> = value | dotted-term | fn-call
 
-   fn-call = !keyword symbol (<space> expression)+ (<space> hash-param)*
-   hash-param = symbol <'='> expression
+   fn-call = !keyword symbol (<space> expression)+ hash-params?
+   hash-params = (<space> symbol <'='> expression)+
    <expression> = value | dotted-term | <'('> <maybe-space> fn-call <maybe-space> <')'>
    dotted-term = !keyword symbol (<'.'> symbol)*
    keyword = else | boolean-value
@@ -217,6 +217,10 @@
       :dotted-term (if (= (count content) 1)
                      (list 'hopen/ctx (keyword arg0))
                      (list 'get-in 'hopen/ctx (mapv keyword content)))
+      :hash-params (into {}
+                         (comp (partition-all 2)
+                               (map (fn [[k v]] [(keyword k) (to-data-template v)])))
+                         content)
       :open-block
       (let [[block-name arg0] content]
         (case block-name

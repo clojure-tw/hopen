@@ -124,10 +124,13 @@
       "{{foo bar (a b.c)}}"
       '[(foo (hopen/ctx :bar) (a (get-in hopen/ctx [:b :c])))]
 
-      ;"{{foo bar a.b c=d e=f}}"
-      ;'[(foo (hopen/ctx :bar)
-      ;       (get-in hopen/ctx [:a :b])
-      ;       {:c d, :e f})]
+      "{{foo bar a.b c=d e=true f=3 g=\"hello\"}}"
+      '[(foo (hopen/ctx :bar)
+             (get-in hopen/ctx [:a :b])
+             {:c (hopen/ctx :d)
+              :e true
+              :f 3
+              :g "hello"})]
 
       "a{{#if b}}c{{/if}}d"
       '["a"
