@@ -181,4 +181,8 @@
            (b/for [hopen/ctx (get-in hopen/ctx [:dd :dd])]
              [" ee "])
            " ff "])
-        " gg"])))
+        " gg"]
+
+      "{{#each coll as |x i|}}d{{/each}}"
+      '[(b/for [x (hopen/ctx :coll) :indexed-by i]
+         ["d"])])))
