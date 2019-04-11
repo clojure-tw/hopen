@@ -96,7 +96,7 @@
 
 (defn- handlebars-comment? [[type segment]]
   (and (= type :syntax)
-       (or (re-matches #"\!\s+([\s\S]*)\s" segment)
+       (or (re-matches #"\!\s+([\s\S]*)" segment)
            (re-matches #"\!\-\-\s+([\s\S]*)\s\-\-" segment))))
 
 ;; TODO: support line characters removal.
@@ -139,7 +139,7 @@
    <expression> = value | dotted-term | <'('> <maybe-space> fn-call <maybe-space> <')'>
    dotted-term = !keyword symbol (<'.'> symbol)*
    keyword = else | boolean-value
-   <symbol> = #'[a-zA-Z_][a-zA-Z0-9_]*'
+   <symbol> = #'[a-zA-Z_-][a-zA-Z0-9_-]*'
    <value> = string-value | boolean-value | number-value
    string-value = <'\"'> #'[^\"]*' <'\"'>
    boolean-value = 'true' | 'false'
@@ -207,7 +207,7 @@
   "Generates a data-template from a handlebars tree's node."
   [node]
   (let [{:keys [tag content children]} node
-        [arg0] content]
+        [arg0 arg1] content]
     (case tag
       :root (mapv to-data-template children)
       (:text :string-value) arg0
@@ -221,6 +221,11 @@
                          (comp (partition-all 2)
                                (map (fn [[k v]] [(keyword k) (to-data-template v)])))
                          content)
+      :partial (list 'b/template
+                     (keyword arg0)
+                     (if arg1
+                       (list 'merge 'hopen/ctx (to-data-template arg1))
+                       'hopen/ctx))
       :open-block
       (let [[block-name arg0] content]
         (case block-name

@@ -185,4 +185,15 @@
 
       "{{#each coll as |x i|}}d{{/each}}"
       '[(b/for [x (hopen/ctx :coll) :indexed-by i]
-         ["d"])])))
+         ["d"])]
+
+      "a {{> confirm-button}} b"
+      '["a "
+        (b/template :confirm-button hopen/ctx)
+        " b"]
+
+      "a {{> confirm-button title=\"Alright\"}} b"
+      '["a "
+        (b/template :confirm-button (merge hopen/ctx {:title "Alright"}))
+        " b"])))
+
