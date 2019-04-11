@@ -42,15 +42,19 @@
 (defn- rf-for [rf env result bindings-seq content]
   (letfn [(for-binding [env result bindings]
             (if (seq bindings)
-              (let [[[symb coll {:keys [separated-by]}] & next-bindings] bindings]
-                (inter-reduce (fn [result val]
-                                  (for-binding (update env :bindings assoc symb val)
+              (let [[[symb coll options] & next-bindings] bindings
+                    {:keys [indexed-by separated-by]} options]
+                (inter-reduce (fn [result [index val]]
+                                  (for-binding (update env :bindings
+                                                       (fn [env-bindings]
+                                                         (cond-> (assoc env-bindings symb val)
+                                                           (some? indexed-by) (assoc indexed-by index))))
                                                result
                                                next-bindings))
                               (fn [result]
                                 (rf-block rf env result separated-by))
                               result
-                              (tpl-eval env coll)))
+                              (map-indexed vector (tpl-eval env coll))))
               (rf-block rf env result content)))]
     (for-binding env result (util/parse-bindings bindings-seq))))
 
