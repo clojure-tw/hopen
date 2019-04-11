@@ -4,9 +4,10 @@
             [clojure.zip :as z]
             [hopen.syntax.util :refer [re-quote]]
             [hopen.util :refer [throw-exception triml]]
-            [instaparse.core #?@(:clj [:refer [defparser]]
+            [instaparse.core #?@(:clj  [:refer [defparser]]
                                  :cljs [:refer-macros [defparser]])]
-            [instaparse.gll :refer [text->segment sub-sequence]]))
+            [instaparse.gll :refer [text->segment sub-sequence]]
+            [hopen.util :refer [parse-long]]))
 
 (def default-delimiters {:open "{{", :close "}}"})
 
@@ -211,7 +212,8 @@
     (case tag
       :root (mapv to-data-template children)
       (:text :string-value) arg0
-      (:boolean-value :number-value) (read-string arg0)
+      :boolean-value (= arg0 "true")
+      :number-value (parse-long arg0)
       :fn-call (let [[func & args] content]
                  (list* (symbol func) (map to-data-template args)))
       :dotted-term (if (= (count content) 1)

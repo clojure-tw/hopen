@@ -54,6 +54,10 @@
             [data]
             path)))
 
+(defn parse-long [s]
+  #?(:cljs (js/parseInt s)
+     :clj (Long/parseLong s)))
+
 (defn throw-exception [message]
   (throw (#?(:clj  Exception.
              :cljs js/Error.) message)))
