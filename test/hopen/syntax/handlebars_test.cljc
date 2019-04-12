@@ -3,8 +3,10 @@
                :cljs [cljs.test    :refer [deftest testing is are]
                                    :include-macros true])
             [hopen.util :refer [triml]]
-            [hopen.syntax.handlebars :as hb :refer [parse]]
-            [instaparse.gll :refer [text->segment]]))
+            [hopen.syntax.handlebars :as hb :refer [parse with-handlebars-env]]
+            [instaparse.gll :refer [text->segment]]
+            [hopen.renderer.env :refer [standard-env]]
+            [hopen.renderer.xf :refer [renderer with-renderer-env]]))
 
 (deftest re-matches-test
   (testing "Check that some edge cases on regexp are consistent across the platforms."
@@ -229,3 +231,23 @@
       []
       {}
       #{})))
+
+(deftest handlebars-renderer-integration-tests
+  (let [env (-> standard-env
+                (with-handlebars-env)
+                (with-renderer-env))]
+    (are [hb-template data expected-result]
+      (= (into [] (renderer (parse hb-template) env) [data])
+         expected-result)
+
+      "{{#with a}}{{b}}{{c.d}}e{{/with}}"
+      {:a {:b 1, :c {:d 2}}}
+      [1 2 "e"]
+
+      "{{#each coll as |x i|}}{{x}}{{i}}d{{/each}}"
+      {:coll [:a :b :c]}
+      [:a 0 "d" :b 1 "d" :c 2 "d"]
+
+      "{{#each coll as |x i|}}{{x}}{{i}}d{{/each}}"
+      {:coll {:a "aa" :b "bb"}}
+      ["aa" :a "d" "bb" :b "d"])))
