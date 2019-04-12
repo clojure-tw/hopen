@@ -231,21 +231,23 @@
       :open-block
       (let [[block-name arg0] content]
         (case block-name
-          "if"   (if-let [then (seq (:then node))]
-                   (list 'b/if (to-data-template arg0)
-                         (mapv to-data-template then)
+          "if"     (if-let [then (seq (:then node))]
+                     (list 'b/if (list 'hb/true? (to-data-template arg0))
+                           (mapv to-data-template then)
+                           (mapv to-data-template children))
+                     (list 'b/if (list 'hb/true? (to-data-template arg0))
+                           (mapv to-data-template children)))
+          "unless" (list 'b/if (list 'hb/false? (to-data-template arg0))
                          (mapv to-data-template children))
-                   (list 'b/if (to-data-template arg0)
-                         (mapv to-data-template children)))
-          "with" (list 'b/let ['hopen/ctx (to-data-template arg0)]
-                       (mapv to-data-template children))
-          "each" (let [for-binding (if (= (:tag arg0) :each-as-args)
-                                     (let [[coll var index] (:content arg0)]
-                                       [(symbol var) (to-data-template coll)
-                                        :indexed-by (symbol index)])
-                                     ['hopen/ctx (to-data-template arg0)])]
-                   (list 'b/for for-binding
-                         (mapv to-data-template children)))))
+          "with"   (list 'b/let ['hopen/ctx (to-data-template arg0)]
+                         (mapv to-data-template children))
+          "each"   (let [for-binding (if (= (:tag arg0) :each-as-args)
+                                       (let [[coll var index] (:content arg0)]
+                                         [(symbol var) (to-data-template coll)
+                                          :indexed-by (symbol index)])
+                                       ['hopen/ctx (to-data-template arg0)])]
+                     (list 'b/for for-binding
+                           (mapv to-data-template children)))))
       ["Unhandled:" node])))
 
 (defn parse [template]

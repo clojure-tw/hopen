@@ -134,33 +134,39 @@
 
       "a{{#if b}}c{{/if}}d"
       '["a"
-        (b/if (hopen/ctx :b)
+        (b/if (hb/true? (hopen/ctx :b))
           ["c"])
         "d"]
 
       "a{{#if b}}c{{else}}d{{/if}}e"
       '["a"
-        (b/if (hopen/ctx :b)
+        (b/if (hb/true? (hopen/ctx :b))
           ["c"]
           ["d"])
         "e"]
 
       "a{{#if b}}c{{else if d}}e{{/if}}f"
       '["a"
-        (b/if (hopen/ctx :b)
+        (b/if (hb/true? (hopen/ctx :b))
           ["c"]
-          [(b/if (hopen/ctx :d)
+          [(b/if (hb/true? (hopen/ctx :d))
              ["e"])])
         "f"]
 
       "a{{#if b}}c{{else if d}}e{{else}}f{{/if}}g"
       '["a"
-        (b/if (hopen/ctx :b)
+        (b/if (hb/true? (hopen/ctx :b))
           ["c"]
-          [(b/if (hopen/ctx :d)
+          [(b/if (hb/true? (hopen/ctx :d))
              ["e"]
              ["f"])])
         "g"]
+
+      "a{{#unless b}}c{{/unless}}d"
+      '["a"
+        (b/if (hb/false? (hopen/ctx :b))
+          ["c"])
+        "d"]
 
       "{{#each a.b}}c{{/each}}"
       '[(b/for [hopen/ctx (get-in hopen/ctx [:a :b])]
@@ -176,7 +182,7 @@
 
       "aa {{#if bb}} cc {{#each dd.dd}} ee {{/each}} ff {{/if}} gg"
       '["aa "
-        (b/if (hopen/ctx :bb)
+        (b/if (hb/true? (hopen/ctx :bb))
           [" cc "
            (b/for [hopen/ctx (get-in hopen/ctx [:dd :dd])]
              [" ee "])
