@@ -203,3 +203,26 @@
         (b/template :confirm-button (merge hopen/ctx {:title "Alright"}))
         " b"])))
 
+(deftest handlebars-false?-test
+  (testing "truthy things"
+    (are [val]
+      (not (#'hb/handlebars-false? val))
+
+      true
+      3
+      "hi"
+      [""]
+      {"" ""}
+      #{""}))
+
+  (testing "falsey things"
+    (are [val]
+      (#'hb/handlebars-false? val)
+
+      nil
+      false
+      0
+      ""
+      []
+      {}
+      #{})))

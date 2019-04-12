@@ -259,3 +259,14 @@
                  [template])
       z/root
       to-data-template))
+
+(defn- handlebars-false? [x]
+  (or (not x)
+      (and (string? x) (empty? x))
+      (and (number? x) (zero? x))
+      (and (coll? x) (empty? x))))
+
+(defn with-handlebars-env [env]
+  (update env :bindings assoc
+          'hb/true? (comp not handlebars-false?)
+          'hb/false? handlebars-false?))
