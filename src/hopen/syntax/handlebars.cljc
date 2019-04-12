@@ -241,12 +241,15 @@
                          (mapv to-data-template children))
           "with"   (list 'b/let ['hopen/ctx (to-data-template arg0)]
                          (mapv to-data-template children))
-          "each"   (let [for-binding (if (= (:tag arg0) :each-as-args)
-                                       (let [[coll var index] (:content arg0)]
-                                         [(symbol var) (to-data-template coll)
-                                          :indexed-by (symbol index)])
-                                       ['hopen/ctx (to-data-template arg0)])]
-                     (list 'b/for for-binding
+          "each"   (if (= (:tag arg0) :each-as-args)
+                     (let [[coll var index] (:content arg0)]
+                       (list 'b/for ['hb/kv-pair (list 'hb/as-kvs (to-data-template coll))]
+                             [(list 'b/let ['hopen/ctx
+                                            (list 'assoc 'hopen/ctx
+                                                  (keyword index) '(first hb/kv-pair)
+                                                  (keyword var) '(second hb/kv-pair))]
+                                    (mapv to-data-template children))]))
+                     (list 'b/for ['hopen/ctx (to-data-template arg0)]
                            (mapv to-data-template children)))))
       ["Unhandled:" node])))
 
@@ -266,7 +269,13 @@
       (and (number? x) (zero? x))
       (and (coll? x) (empty? x))))
 
+(defn- as-key-value-pairs [coll]
+  (cond
+    (map? coll) (seq coll)
+    (coll? coll) (map-indexed vector coll)))
+
 (defn with-handlebars-env [env]
   (update env :bindings assoc
           'hb/true? (comp not handlebars-false?)
-          'hb/false? handlebars-false?))
+          'hb/false? handlebars-false?
+          'hb/as-kvs as-key-value-pairs))

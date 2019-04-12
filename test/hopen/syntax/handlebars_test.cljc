@@ -190,8 +190,11 @@
         " gg"]
 
       "{{#each coll as |x i|}}d{{/each}}"
-      '[(b/for [x (hopen/ctx :coll) :indexed-by i]
-         ["d"])]
+      '[(b/for [hb/kv-pair (hb/as-kvs (hopen/ctx :coll))]
+          [(b/let [hopen/ctx (assoc hopen/ctx
+                                    :i (first hb/kv-pair)
+                                    :x (second hb/kv-pair))]
+             ["d"])])]
 
       "a {{> confirm-button}} b"
       '["a "
