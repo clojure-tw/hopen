@@ -140,8 +140,8 @@
 (defn- inline-quote [env val]
   val)
 
-(def default-env
-  (merge env/standard-env
+(defn with-renderer-env [env]
+  (merge env
          {;; The block-macro functions get their args unevaluated and render blocks of elements in-place.
           :block-macro
           {'b/for       rf-for
@@ -160,7 +160,7 @@
            'quote inline-quote}}))
 
 (defn renderer
-  ([tpl] (renderer tpl default-env))
+  ([tpl] (renderer tpl (with-renderer-env env/standard-env)))
   ([tpl env] (fn [rf]
                (fn
                  ([] (rf))

@@ -36,6 +36,7 @@
     'collect    util/collect
     'collect-in util/collect-in
     'first      first
+    'second     second
     'next       next
     'last       last
     'pop        pop
@@ -50,6 +51,7 @@
     'merge  merge
 
     ;; Build sequences
+    'seq           seq
     'list          list
     'take          take
     'drop          drop
@@ -93,6 +95,11 @@
     'sorted?  sorted?
     'set?     set?
     'record?  record?
+
+    ;; Other predicates
+    'not    not
+    'nil?   nil?
+    'some?  some?
 
     ;; Text transformations
     'str   str

@@ -2,7 +2,10 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                                    :include-macros true])
-            [hopen.renderer.xf :refer [renderer default-env]]))
+            [hopen.renderer.xf :refer [renderer with-renderer-env]]
+            [hopen.renderer.env :as env]))
+
+(def default-env (with-renderer-env env/standard-env))
 
 (deftest seq?-test
   (testing "Check if those assumptions are consistent across all the platforms."
