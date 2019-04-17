@@ -1,7 +1,6 @@
 (ns hopen.syntax.partition
   (:require [clojure.string :as str]
             [hopen.syntax.util :refer [re-quote]]
-            [hopen.util :refer [throw-exception]]
             [instaparse.gll :refer [text->segment sub-sequence]]))
 
 (def default-delimiters {:open "{{", :close "}}"})
@@ -61,7 +60,7 @@
   (if-let [index (str/index-of segment close-delim)]
     [(sub-sequence segment 0 index)
      (sub-sequence segment (+ index (count close-delim)))]
-    (throw-exception close-delim-not-found-msg)))
+    (throw (ex-info close-delim-not-found-msg {}))))
 
 (defn template-partition [delimiters]
   (fn [rf]

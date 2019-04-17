@@ -14,7 +14,8 @@
                                     (apply f env args)
                                     (if-let [f (get-in env [:bindings f-symb])]
                                       (apply f (mapv f-eval args))
-                                      (util/throw-exception (str "Function " f-symb " not found in env " env)))))
+                                      (throw (ex-info (str "Function " f-symb " not found in env.")
+                                                      {:env env})))))
              :else element))]
    (f-eval element)))
 
