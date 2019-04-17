@@ -1,6 +1,6 @@
 (ns hopen.renderer.env
   (:require [clojure.string :as str]
-            [hopen.util :as util]))
+            [hopen.renderer.helper :as helper]))
 
 (def standard-env
   {;; The templates accessible inside the current template.
@@ -33,8 +33,8 @@
    {;; Get things
     'get        get
     'get-in     get-in
-    'collect    util/collect
-    'collect-in util/collect-in
+    'collect    helper/collect
+    'collect-in helper/collect-in
     'first      first
     'second     second
     'next       next

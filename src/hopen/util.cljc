@@ -42,18 +42,6 @@
                        [symb value options]))))
         bindings))
 
-(defn collect [data keys]
-  (into [] (keep #(get data %) keys)))
-
-(defn collect-in [data path]
-  (when (seq path)
-    (reduce (fn [coll keys]
-              (into []
-                    (mapcat (fn [item] (collect item keys)))
-                    coll))
-            [data]
-            path)))
-
 (defn parse-long [s]
   #?(:cljs (js/parseInt s)
      :clj (Long/parseLong s)))
