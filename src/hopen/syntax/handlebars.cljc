@@ -3,8 +3,8 @@
             [clojure.zip :as z]
             [hopen.syntax.partition :as part]
             [hopen.util :refer [parse-long]]
-            [instaparse.core #?@(:clj  [:refer [defparser]]
-                                 :cljs [:refer-macros [defparser]])]))
+            [instaparse.core :as insta #?@(:clj  [:refer [defparser]]
+                                           :cljs [:refer-macros [defparser]])]))
 
 (defn- handlebars-comment? [[type segment]]
   (and (= type :syntax)
@@ -65,7 +65,17 @@
   [[type segment]]
   (case type
     :text {:tag :text, :content (list (apply str segment))}
-    :syntax (-> (handlebars-syntax-parser (str segment)) :content first)))
+    :syntax (->> (handlebars-syntax-parser (str segment))
+                 (insta/transform {:open-block (fn [block-type & content-rest]
+                                                 {:tag :open-block
+                                                  :block-type (keyword block-type)
+                                                  :content content-rest})
+                                   :close-block (fn [block-type & content-rest]
+                                                  {:tag :close-block
+                                                   :block-type (keyword block-type)
+                                                   :content content-rest})})
+                 :content
+                 first)))
 
 (defn- handlebars-zipper
   ([] (handlebars-zipper {:tag :root}))
@@ -79,16 +89,16 @@
   (rename-keys node {:children :then}))
 
 (defn- find-opening-block [zipper closing-node]
-  (let [closing-block-name (-> closing-node :content first)]
-    (some (fn [z]
-            (assert (some? z) "No opening block found.")
-            (let [node (z/node z)]
-              (when (and (= (:tag node) :open-block)
-                         (not (:did-not-open-a-block node)))
-                (assert (= (-> node :content first) closing-block-name)
-                        "The closing block does not match the opening block.")
-                z)))
-          (iterate z/up zipper))))
+  (->> (iterate z/up zipper)
+       (some (fn [z]
+               (assert (some? z) "No opening block found.")
+               (let [node (z/node z)]
+                 (when (and (= (:tag node) :open-block)
+                            (not (:did-not-open-a-block node)))
+                   (assert (= (:block-type node)
+                              (:block-type closing-node))
+                           "The closing block does not match the opening block.")
+                   z))))))
 
 (defn- handlebars-zipper-reducer
   "Builds a tree-shaped representation of the handlebar's nodes."
@@ -106,8 +116,8 @@
                       (z/edit children->then)
                       (z/append-child (-> node
                                           (assoc :tag :open-block
-                                                 :did-not-open-a-block true)
-                                          (update :content conj "if")))
+                                                 :block-type :if
+                                                 :did-not-open-a-block true)))
                       (z/down))
      :close-block (-> zipper
                       (find-opening-block node)
@@ -118,7 +128,7 @@
 (defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
   [node]
-  (let [{:keys [tag content children]} node
+  (let [{:keys [tag block-type content children]} node
         [arg0 arg1] content]
     (case tag
       :root (mapv to-data-template children)
@@ -139,30 +149,29 @@
                      (if arg1
                        (list 'merge 'hopen/ctx (to-data-template arg1))
                        'hopen/ctx))
-      :open-block
-      (let [[block-name arg0] content]
-        (case block-name
-          "if"     (if-let [then (seq (:then node))]
-                     (list 'b/if (list 'hb/true? (to-data-template arg0))
-                           (mapv to-data-template then)
-                           (mapv to-data-template children))
-                     (list 'b/if (list 'hb/true? (to-data-template arg0))
-                           (mapv to-data-template children)))
-          "unless" (list 'b/if (list 'hb/false? (to-data-template arg0))
-                         (mapv to-data-template children))
-          "with"   (list 'b/let ['hopen/ctx (to-data-template arg0)]
-                         (mapv to-data-template children))
-          "each"   (if (= (:tag arg0) :each-as-args)
-                     (let [[coll var index] (:content arg0)]
-                       (list 'b/for ['hb/kv-pair (list 'hb/as-kvs (to-data-template coll))]
-                             [(list 'b/let ['hopen/ctx
-                                            (list 'assoc 'hopen/ctx
-                                                  (keyword index) '(first hb/kv-pair)
-                                                  (keyword var) '(second hb/kv-pair))]
-                                    (mapv to-data-template children))]))
-                     (list 'b/for ['hopen/ctx (to-data-template arg0)]
-                           (mapv to-data-template children)))))
-      ["Unhandled:" node])))
+      :open-block (case block-type
+                    :if     (if-let [then (seq (:then node))]
+                              (list 'b/if (list 'hb/true? (to-data-template arg0))
+                                    (mapv to-data-template then)
+                                    (mapv to-data-template children))
+                              (list 'b/if (list 'hb/true? (to-data-template arg0))
+                                    (mapv to-data-template children)))
+                    :unless (list 'b/if (list 'hb/false? (to-data-template arg0))
+                                  (mapv to-data-template children))
+                    :with   (list 'b/let ['hopen/ctx (to-data-template arg0)]
+                                  (mapv to-data-template children))
+                    :each   (if (= (:tag arg0) :each-as-args)
+                              (let [[coll var index] (:content arg0)]
+                                (list 'b/for ['hb/kv-pair (list 'hb/as-kvs (to-data-template coll))]
+                                      [(list 'b/let ['hopen/ctx
+                                                     (list 'assoc 'hopen/ctx
+                                                           (keyword index) '(first hb/kv-pair)
+                                                           (keyword var) '(second hb/kv-pair))]
+                                             (mapv to-data-template children))]))
+                              (list 'b/for ['hopen/ctx (to-data-template arg0)]
+                                    (mapv to-data-template children)))
+                    ["Unhandled block-type:" node])
+      ["Unhandled node type:" node])))
 
 (defn parse [template]
   (-> (transduce (comp (part/template-partition part/default-delimiters)
