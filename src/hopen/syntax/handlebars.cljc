@@ -78,8 +78,8 @@
                  first)))
 
 (defn- handlebars-zipper
-  ([] (handlebars-zipper {:tag :root}))
-  ([root] (z/zipper (comp #{:root :block} :tag)                                ; branch?
+  ([] (handlebars-zipper {:tag :block :block-type :root}))
+  ([root] (z/zipper (fn [node] (= (:tag node) :block))                         ; branch?
                     :children
                     (fn [node children] (assoc node :children (vec children))) ; make-node
                     root)))
@@ -131,7 +131,6 @@
   (let [{:keys [tag block-type content children]} node
         [arg0 arg1] content]
     (case tag
-      :root (mapv to-data-template children)
       (:text :string-value) arg0
       :boolean-value (= arg0 "true")
       :number-value (parse-long arg0)
@@ -150,6 +149,7 @@
                        (list 'merge 'hopen/ctx (to-data-template arg1))
                        'hopen/ctx))
       :block (case block-type
+               :root   (mapv to-data-template children)
                :if     (if-let [then (seq (:then node))]
                          (list 'b/if (list 'hb/true? (to-data-template arg0))
                                (mapv to-data-template then)
