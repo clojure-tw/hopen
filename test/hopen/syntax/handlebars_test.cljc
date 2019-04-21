@@ -25,15 +25,15 @@
              |</div>")
       [(triml "<div class=\"entry\">
              |  <h1>")
-       '(hopen/ctx :title)
+       '(hopen/root :title)
        (triml "</h1>
              |  <h2>By ")
-       '(get-in hopen/ctx [:author :name])
+       '(get-in hopen/root [:author :name])
        (triml "</h2>
              |
              |  <div class=\"body\">
              |    ")
-       '(hopen/ctx :body)
+       '(hopen/root :body)
        (triml "
              |  </div>
              |</div>")]
@@ -57,7 +57,7 @@
       ["aa  bb"]
 
       "aa {{= | | =}} bb |cc.dd.ee| ff"
-      '["aa  bb " (get-in hopen/ctx [:cc :dd :ee]) " ff"]
+      '["aa  bb " (get-in hopen/root [:cc :dd :ee]) " ff"]
 
       "{{false}}{{true}}"
       [false true]
@@ -69,91 +69,91 @@
       ["some text"]
 
       "{{foo bar a.b}}"
-      '[(foo (hopen/ctx :bar) (get-in hopen/ctx [:a :b]))]
+      '[(foo (hopen/root :bar) (get-in hopen/root [:a :b]))]
 
       "{{foo bar (a b.c)}}"
-      '[(foo (hopen/ctx :bar) (a (get-in hopen/ctx [:b :c])))]
+      '[(foo (hopen/root :bar) (a (get-in hopen/root [:b :c])))]
 
       "{{foo bar a.b c=d e=true f=3 g=\"hello\"}}"
-      '[(foo (hopen/ctx :bar)
-             (get-in hopen/ctx [:a :b])
-             {:c (hopen/ctx :d)
+      '[(foo (hopen/root :bar)
+             (get-in hopen/root [:a :b])
+             {:c (hopen/root :d)
               :e true
               :f 3
               :g "hello"})]
 
       "a{{#if b}}c{{/if}}d"
       '["a"
-        (b/if (hb/true? (hopen/ctx :b))
+        (b/if (hb/true? (hopen/root :b))
           ["c"])
         "d"]
 
       "a{{#if b}}c{{else}}d{{/if}}e"
       '["a"
-        (b/if (hb/true? (hopen/ctx :b))
+        (b/if (hb/true? (hopen/root :b))
           ["c"]
           ["d"])
         "e"]
 
       "a{{#if b}}c{{else if d}}e{{/if}}f"
       '["a"
-        (b/if (hb/true? (hopen/ctx :b))
+        (b/if (hb/true? (hopen/root :b))
           ["c"]
-          [(b/if (hb/true? (hopen/ctx :d))
+          [(b/if (hb/true? (hopen/root :d))
              ["e"])])
         "f"]
 
       "a{{#if b}}c{{else if d}}e{{else}}f{{/if}}g"
       '["a"
-        (b/if (hb/true? (hopen/ctx :b))
+        (b/if (hb/true? (hopen/root :b))
           ["c"]
-          [(b/if (hb/true? (hopen/ctx :d))
+          [(b/if (hb/true? (hopen/root :d))
              ["e"]
              ["f"])])
         "g"]
 
       "a{{#unless b}}c{{/unless}}d"
       '["a"
-        (b/if (hb/false? (hopen/ctx :b))
+        (b/if (hb/false? (hopen/root :b))
           ["c"])
         "d"]
 
       "{{#each a.b}}c{{/each}}"
-      '[(b/for [hopen/ctx (get-in hopen/ctx [:a :b])]
+      '[(b/for [hb/ctx1 (get-in hopen/root [:a :b])]
           ["c"])]
 
       "{{#with a}}b{{/with}}"
-      '[(b/let [hopen/ctx (hopen/ctx :a)]
+      '[(b/let [hb/ctx1 (hopen/root :a)]
           ["b"])]
 
       "{{#with a.b}}c{{/with}}"
-      '[(b/let [hopen/ctx (get-in hopen/ctx [:a :b])]
+      '[(b/let [hb/ctx1 (get-in hopen/root [:a :b])]
           ["c"])]
 
       "aa {{#if bb}} cc {{#each dd.dd}} ee {{/each}} ff {{/if}} gg"
       '["aa "
-        (b/if (hb/true? (hopen/ctx :bb))
+        (b/if (hb/true? (hopen/root :bb))
           [" cc "
-           (b/for [hopen/ctx (get-in hopen/ctx [:dd :dd])]
+           (b/for [hb/ctx1 (get-in hopen/root [:dd :dd])]
              [" ee "])
            " ff "])
         " gg"]
 
       "{{#each coll as |x i|}}d{{/each}}"
-      '[(b/for [hb/kv-pair (hb/as-kvs (hopen/ctx :coll))]
-          [(b/let [hopen/ctx (assoc hopen/ctx
-                                    :i (first hb/kv-pair)
-                                    :x (second hb/kv-pair))]
+      '[(b/for [hb/kv-pair (hb/as-kvs (hopen/root :coll))]
+          [(b/let [hb/ctx1 (assoc hopen/root
+                                  :i (first hb/kv-pair)
+                                  :x (second hb/kv-pair))]
              ["d"])])]
 
       "a {{> confirm-button}} b"
       '["a "
-        (b/template :confirm-button hopen/ctx)
+        (b/template :confirm-button hopen/root)
         " b"]
 
       "a {{> confirm-button title=\"Alright\"}} b"
       '["a "
-        (b/template :confirm-button (merge hopen/ctx {:title "Alright"}))
+        (b/template :confirm-button (merge hopen/root {:title "Alright"}))
         " b"])))
 
 (deftest handlebars-false?-test

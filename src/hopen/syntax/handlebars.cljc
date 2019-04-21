@@ -186,12 +186,17 @@
                 n))
             root-node))
 
-;; TODO: support the `..`
+(defn- ctx-symbol [nesting-level]
+  (if (zero? nesting-level)
+    'hopen/root
+    (symbol "hb" (str "ctx" nesting-level))))
+
 (defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
   [node]
-  (let [{:keys [tag block-type content children]} node
-        [arg0 arg1] content]
+  (let [{:keys [tag block-type content children ctx-nesting]} node
+        [arg0 arg1] content
+        ctx-symb (some-> ctx-nesting (ctx-symbol))]
     (case tag
       (:text :string-value) arg0
       :boolean-value (= arg0 "true")
@@ -199,8 +204,8 @@
       :fn-call (let [[func & args] content]
                  (list* (symbol func) (map to-data-template args)))
       :dotted-term (if (= (count content) 1)
-                     (list 'hopen/ctx (keyword arg0))
-                     (list 'get-in 'hopen/ctx (mapv keyword content)))
+                     (list ctx-symb (keyword arg0))
+                     (list 'get-in ctx-symb (mapv keyword content)))
       :hash-params (into {}
                          (comp (partition-all 2)
                                (map (fn [[k v]] [(keyword k) (to-data-template v)])))
@@ -208,8 +213,8 @@
       :partial (list 'b/template
                      (keyword arg0)
                      (if arg1
-                       (list 'merge 'hopen/ctx (to-data-template arg1))
-                       'hopen/ctx))
+                       (list 'merge ctx-symb (to-data-template arg1))
+                       ctx-symb))
       :block (case block-type
                :root   (mapv to-data-template children)
                :if     (if-let [then (seq (:then node))]
@@ -220,17 +225,17 @@
                                (mapv to-data-template children)))
                :unless (list 'b/if (list 'hb/false? (to-data-template arg0))
                              (mapv to-data-template children))
-               :with   (list 'b/let ['hopen/ctx (to-data-template arg0)]
+               :with   (list 'b/let [ctx-symb (to-data-template arg0)]
                              (mapv to-data-template children))
                :each   (if (= (:tag arg0) :each-as-args)
                          (let [[coll var index] (:content arg0)]
                            (list 'b/for ['hb/kv-pair (list 'hb/as-kvs (to-data-template coll))]
-                                 [(list 'b/let ['hopen/ctx
-                                                (list 'assoc 'hopen/ctx
+                                 [(list 'b/let [ctx-symb
+                                                (list 'assoc (ctx-symbol (dec ctx-nesting))
                                                       (keyword index) '(first hb/kv-pair)
                                                       (keyword var) '(second hb/kv-pair))]
                                         (mapv to-data-template children))]))
-                         (list 'b/for ['hopen/ctx (to-data-template arg0)]
+                         (list 'b/for [ctx-symb (to-data-template arg0)]
                                (mapv to-data-template children)))
                ["Unhandled block-type:" node])
       ["Unhandled node type:" node])))
