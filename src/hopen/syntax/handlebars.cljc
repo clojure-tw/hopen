@@ -1,8 +1,9 @@
 (ns hopen.syntax.handlebars
   (:require [clojure.set :refer [rename-keys]]
+            [clojure.walk :refer [postwalk]]
             [clojure.zip :as z]
             [hopen.syntax.partition :as part]
-            [hopen.util :refer [parse-long]]
+            [hopen.util :refer [parse-long update-existing]]
             [instaparse.core :as insta #?@(:clj  [:refer [defparser]]
                                            :cljs [:refer-macros [defparser]])]))
 
@@ -124,6 +125,39 @@
                       z/up)
      (z/append-child zipper node))))
 
+(defn- assoc-nesting
+  "Add context nesting information to context-altering blocks and dotted-terms."
+  [node]
+  (letfn [(assoc-nesting-to-dotted-terms [nesting]
+            (fn [node]
+              (postwalk (fn [n]
+                          (cond-> n
+                            (and (map? n)
+                                 (= (:tag n) :dotted-term)) (assoc :ctx-nesting nesting)))
+                        node)))
+
+          (assoc-nesting-to-block [nesting]
+            (fn [node]
+              (if (= (:tag node) :block)
+                (case (:block-type node)
+                  (:if :unless)
+                  (-> node
+                      (update          :content  (assoc-nesting-to-dotted-terms nesting))
+                      (update-existing :then     (assoc-nesting-to-blocks nesting))
+                      (update          :children (assoc-nesting-to-blocks nesting)))
+                  (:with :each)
+                  (-> node
+                      (assoc :ctx-nesting (inc nesting))
+                      (update :content  (assoc-nesting-to-dotted-terms nesting))
+                      (update :children (assoc-nesting-to-blocks (inc nesting)))))
+                ((assoc-nesting-to-dotted-terms nesting) node))))
+
+          (assoc-nesting-to-blocks [nesting]
+            (fn [blocks]
+              (mapv (assoc-nesting-to-block nesting) blocks)))]
+
+    (update node :children (assoc-nesting-to-blocks 0))))
+
 ;; TODO: support the `..`
 (defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
@@ -180,8 +214,9 @@
                        (map handlebars-node))
                  handlebars-zipper-reducer
                  [template])
-      z/root
-      to-data-template))
+      (z/root)
+      (assoc-nesting)
+      (to-data-template)))
 
 (defn- handlebars-false? [x]
   (or (not x)

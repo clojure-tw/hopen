@@ -180,7 +180,7 @@
       {}
       #{})))
 
-(deftest handlebars-renderer-integration-tests
+(deftest handlebars-renderer-integration-test
   (let [env (-> standard-env
                 (with-handlebars-env)
                 (with-renderer-env))]

@@ -45,3 +45,10 @@
 (defn parse-long [s]
   #?(:cljs (js/parseInt s)
      :clj (Long/parseLong s)))
+
+(defn update-existing
+  "Updates the map only on the keys that already exist in the map."
+  [m k f & args]
+  (if (contains? m k)
+    (apply update m k f args)
+    m))

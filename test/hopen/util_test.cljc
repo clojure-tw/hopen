@@ -2,7 +2,7 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                       :include-macros true])
-            [hopen.util :refer [triml parse-bindings]]))
+            [hopen.util :refer [triml parse-bindings update-existing]]))
 
 (deftest triml-test
   (is (= (triml "hello,
@@ -23,3 +23,9 @@
       '[[var0 val0 {:foo foo-val :bar bar-val}]
         [var1 val1 nil]
         [var2 val2 {:separated-by "|"}]])))
+
+(deftest update-existing-test
+  (is (= (update-existing {:a 1} :a inc)
+         {:a 2}))
+  (is (= (update-existing {:a 1} :b identity)
+         {:a 1})))
