@@ -139,8 +139,8 @@
               (postwalk (fn [n]
                           (cond-> n
                             (and (map? n)
-                                 (= (:tag n) :dotted-term)) (-> (assoc :ctx-nesting nesting)
-                                                                (simplify-dotted-term))))
+                                 (#{:dotted-term :partial} (:tag n))) (-> (assoc :ctx-nesting nesting)
+                                                                          (simplify-dotted-term))))
                         node)))
 
           (assoc-nesting-to-block [nesting]
