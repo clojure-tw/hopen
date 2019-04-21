@@ -127,7 +127,7 @@
 
 (defn- assoc-nesting
   "Add context nesting information to context-altering blocks and dotted-terms."
-  [node]
+  [root-node]
   (letfn [(simplify-dotted-term [{:keys [content ctx-nesting] :as node}]
             (let [n (count (take-while #{"../"} content))]
               (assoc node
@@ -163,7 +163,28 @@
             (fn [blocks]
               (mapv (assoc-nesting-to-block nesting) blocks)))]
 
-    (update node :children (assoc-nesting-to-blocks 0))))
+    (-> root-node
+        (assoc :ctx-nesting 0)
+        (update :children (assoc-nesting-to-blocks 0)))))
+
+(defn assoc-references-to-context-blocks [root-node]
+  (postwalk (fn [n]
+              (if (and (map? n)
+                       (#{:root :with :each} (:block-type n)))
+                (let [block-nesting (:ctx-nesting n)
+                      refs (->> (tree-seq coll?
+                                          (fn [x]
+                                            (cond-> x
+                                              (map? x) (vals)))
+                                          n)
+                                (filter (fn [x]
+                                          (and (map? x)
+                                               (= (:tag x) :dotted-term)
+                                               (= (:ctx-nesting x) block-nesting))))
+                                (into []))]
+                  (assoc n :refs refs))
+                n))
+            root-node))
 
 ;; TODO: support the `..`
 (defn- to-data-template
@@ -223,6 +244,7 @@
                  [template])
       (z/root)
       (assoc-nesting)
+      (assoc-references-to-context-blocks)
       (to-data-template)))
 
 (defn- handlebars-false? [x]
