@@ -119,8 +119,22 @@
         "d"]
 
       "{{#each a.b}}c{{/each}}"
-      '[(b/for [hb/ctx1 (get-in hopen/root [:a :b])]
-          ["c"])]
+      '[(b/for [hb/pair (hb/as-kvs (get-in hopen/root [:a :b]))]
+          [(b/let [hb/ctx1 (second hb/pair)]
+             ["c"])])]
+
+      "{{#each a.b}}{{@index}}c{{/each}}"
+      '[(b/for [hb/pair (hb/as-kvs (get-in hopen/root [:a :b])) :indexed-by hb/index1]
+          [(b/let [hb/ctx1 (second hb/pair)]
+             [hb/index1
+              "c"])])]
+
+      "{{#each a.b}}{{@key}}c{{/each}}"
+      '[(b/for [hb/pair (hb/as-kvs (get-in hopen/root [:a :b]))]
+          [(b/let [hb/ctx1 (second hb/pair)
+                   hb/key1 (first hb/pair)]
+             [hb/key1
+              "c"])])]
 
       "{{#with a}}b{{/with}}"
       '[(b/let [hb/ctx1 (hopen/root :a)]
@@ -134,17 +148,35 @@
       '["aa "
         (b/if (hb/true? (hopen/root :bb))
           [" cc "
-           (b/for [hb/ctx1 (get-in hopen/root [:dd :dd])]
-             [" ee "])
+           (b/for [hb/pair (hb/as-kvs (get-in hopen/root [:dd :dd]))]
+             [(b/let [hb/ctx1 (second hb/pair)]
+                [" ee "])])
            " ff "])
         " gg"]
 
       "{{#each coll as |x i|}}d{{/each}}"
-      '[(b/for [hb/kv-pair (hb/as-kvs (hopen/root :coll))]
+      '[(b/for [hb/pair (hb/as-kvs (hopen/root :coll))]
           [(b/let [hb/ctx1 (assoc hopen/root
-                                  :i (first hb/kv-pair)
-                                  :x (second hb/kv-pair))]
+                                  :i (first hb/pair)
+                                  :x (second hb/pair))]
              ["d"])])]
+
+      "{{#each coll as |x i|}}{{@index}}d{{/each}}"
+      '[(b/for [hb/pair (hb/as-kvs (hopen/root :coll)) :indexed-by hb/index1]
+          [(b/let [hb/ctx1 (assoc hopen/root
+                                  :i (first hb/pair)
+                                  :x (second hb/pair))]
+             [hb/index1
+              "d"])])]
+
+      "{{#each coll as |x i|}}{{@key}}d{{/each}}"
+      '[(b/for [hb/pair (hb/as-kvs (hopen/root :coll))]
+          [(b/let [hb/ctx1 (assoc hopen/root
+                                  :i (first hb/pair)
+                                  :x (second hb/pair))
+                   hb/key1 (first hb/pair)]
+             [hb/key1
+              "d"])])]
 
       "a {{> confirm-button}} b"
       '["a "

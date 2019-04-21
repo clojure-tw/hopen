@@ -50,7 +50,7 @@
    fn-call = !keyword symbol (<space> expression)+ hash-params?
    hash-params = (<space> symbol <'='> expression)+
    <expression> = value | dotted-term | <'('> <maybe-space> fn-call <maybe-space> <')'>
-   dotted-term = '../'* !keyword symbol (<'.'> symbol)*
+   dotted-term = '../'* (!keyword symbol (<'.'> symbol)* | '@index' | '@key')
    keyword = else | boolean-value
    <symbol> = #'[a-zA-Z_-][a-zA-Z0-9_-]*'
    <value> = string-value | boolean-value | number-value
@@ -79,7 +79,7 @@
                  first)))
 
 (defn- handlebars-zipper
-  ([] (handlebars-zipper {:tag :block :block-type :root}))
+  ([] (handlebars-zipper {:tag :block, :block-type :root}))
   ([root] (z/zipper (fn [node] (= (:tag node) :block))                         ; branch?
                     :children
                     (fn [node children] (assoc node :children (vec children))) ; make-node
@@ -122,7 +122,7 @@
                       (z/down))
      :close-block (-> zipper
                       (find-opening-block node)
-                      z/up)
+                      (z/up))
      (z/append-child zipper node))))
 
 (defn- assoc-nesting
@@ -191,6 +191,12 @@
     'hopen/root
     (symbol "hb" (str "ctx" nesting-level))))
 
+(defn- loop-index-symbol [nesting-level]
+  (symbol "hb" (str "index" nesting-level)))
+
+(defn- loop-key-symbol [nesting-level]
+  (symbol "hb" (str "key" nesting-level)))
+
 (defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
   [node]
@@ -204,7 +210,10 @@
       :fn-call (let [[func & args] content]
                  (list* (symbol func) (map to-data-template args)))
       :dotted-term (if (= (count content) 1)
-                     (list ctx-symb (keyword arg0))
+                     (case arg0
+                       "@index" (loop-index-symbol ctx-nesting)
+                       "@key" (loop-key-symbol ctx-nesting)
+                       (list ctx-symb (keyword arg0)))
                      (list 'get-in ctx-symb (mapv keyword content)))
       :hash-params (into {}
                          (comp (partition-all 2)
@@ -227,16 +236,26 @@
                              (mapv to-data-template children))
                :with   (list 'b/let [ctx-symb (to-data-template arg0)]
                              (mapv to-data-template children))
-               :each   (if (= (:tag arg0) :each-as-args)
-                         (let [[coll var index] (:content arg0)]
-                           (list 'b/for ['hb/kv-pair (list 'hb/as-kvs (to-data-template coll))]
-                                 [(list 'b/let [ctx-symb
-                                                (list 'assoc (ctx-symbol (dec ctx-nesting))
-                                                      (keyword index) '(first hb/kv-pair)
-                                                      (keyword var) '(second hb/kv-pair))]
-                                        (mapv to-data-template children))]))
-                         (list 'b/for [ctx-symb (to-data-template arg0)]
-                               (mapv to-data-template children)))
+               :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
+                             index-options (if loop-index?
+                                             [:indexed-by (loop-index-symbol ctx-nesting)]
+                                             [])
+                             loop-key? (some (comp #{["@key"]} :content) (:refs node))
+                             key-options (if loop-key?
+                                           [(loop-key-symbol ctx-nesting) '(first hb/pair)]
+                                           [])]
+                         (if (= (:tag arg0) :each-as-args)
+                           (let [[coll var index] (:content arg0)]
+                             (list 'b/for (into ['hb/pair (list 'hb/as-kvs (to-data-template coll))] index-options)
+                                   [(list 'b/let (into [ctx-symb (list 'assoc (ctx-symbol (dec ctx-nesting))
+                                                                       (keyword index) '(first hb/pair)
+                                                                       (keyword var) '(second hb/pair))]
+                                                       key-options)
+                                          (mapv to-data-template children))]))
+                           (list 'b/for (into ['hb/pair (list 'hb/as-kvs (to-data-template arg0))] index-options)
+                                 [(list 'b/let (into [ctx-symb '(second hb/pair)]
+                                                     key-options)
+                                        (mapv to-data-template children))])))
                ["Unhandled block-type:" node])
       ["Unhandled node type:" node])))
 
