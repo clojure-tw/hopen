@@ -50,7 +50,7 @@
    fn-call = !keyword symbol (<space> expression)+ hash-params?
    hash-params = (<space> symbol <'='> expression)+
    <expression> = value | dotted-term | <'('> <maybe-space> fn-call <maybe-space> <')'>
-   dotted-term = !keyword symbol (<'.'> symbol)*
+   dotted-term = '../'* !keyword symbol (<'.'> symbol)*
    keyword = else | boolean-value
    <symbol> = #'[a-zA-Z_-][a-zA-Z0-9_-]*'
    <value> = string-value | boolean-value | number-value
@@ -128,12 +128,19 @@
 (defn- assoc-nesting
   "Add context nesting information to context-altering blocks and dotted-terms."
   [node]
-  (letfn [(assoc-nesting-to-dotted-terms [nesting]
+  (letfn [(simplify-dotted-term [{:keys [content ctx-nesting] :as node}]
+            (let [n (count (take-while #{"../"} content))]
+              (assoc node
+                :content (drop n content)
+                :ctx-nesting (- ctx-nesting n))))
+
+          (assoc-nesting-to-dotted-terms [nesting]
             (fn [node]
               (postwalk (fn [n]
                           (cond-> n
                             (and (map? n)
-                                 (= (:tag n) :dotted-term)) (assoc :ctx-nesting nesting)))
+                                 (= (:tag n) :dotted-term)) (-> (assoc :ctx-nesting nesting)
+                                                                (simplify-dotted-term))))
                         node)))
 
           (assoc-nesting-to-block [nesting]
