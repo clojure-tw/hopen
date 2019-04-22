@@ -100,6 +100,7 @@
     'not    not
     'nil?   nil?
     'some?  some?
+    'empty? empty?
 
     ;; Text transformations
     'str   str
