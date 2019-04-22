@@ -85,9 +85,9 @@
                     (fn [node children] (assoc node :children (vec children))) ; make-node
                     root)))
 
-(defn- children->then [node]
-  (assert (not (:then node)) "There are multiple `else` for the same `if`.")
-  (rename-keys node {:children :then}))
+(defn- children->pre-else [node]
+  (assert (not (:pre-else node)) "There are multiple `else` for the same block.")
+  (rename-keys node {:children :pre-else}))
 
 (defn- find-opening-block [zipper closing-node]
   (->> (iterate z/up zipper)
@@ -112,9 +112,9 @@
                       (z/down)
                       (z/rightmost))
      :else        (-> zipper
-                      (z/edit children->then))
+                      (z/edit children->pre-else))
      :else-if     (-> zipper
-                      (z/edit children->then)
+                      (z/edit children->pre-else)
                       (z/append-child (assoc node
                                              :tag :block
                                              :block-type :if
@@ -150,13 +150,14 @@
                   (:if :unless)
                   (-> node
                       (update          :content  (assoc-nesting-to-dotted-terms nesting))
-                      (update-existing :then     (assoc-nesting-to-blocks nesting))
+                      (update-existing :pre-else (assoc-nesting-to-blocks nesting))
                       (update          :children (assoc-nesting-to-blocks nesting)))
                   (:with :each)
                   (-> node
                       (assoc :ctx-nesting (inc nesting))
-                      (update :content  (assoc-nesting-to-dotted-terms nesting))
-                      (update :children (assoc-nesting-to-blocks (inc nesting)))))
+                      (update          :content  (assoc-nesting-to-dotted-terms nesting))
+                      (update-existing :pre-else (assoc-nesting-to-blocks (inc nesting)))
+                      (update          :children (assoc-nesting-to-blocks (inc nesting)))))
                 ((assoc-nesting-to-dotted-terms nesting) node))))
 
           (assoc-nesting-to-blocks [nesting]
@@ -220,16 +221,17 @@
                                  ctx-symb))
       :block (case block-type
                :root   (mapv to-data-template children)
-               :if     (if-let [then (seq (:then node))]
+               :if     (let [then (:pre-else node)]
                          `(~'b/if (~'hb/true? ~(to-data-template arg0))
-                            ~(mapv to-data-template then)
-                            ~(mapv to-data-template children))
-                         `(~'b/if (~'hb/true? ~(to-data-template arg0))
+                            ~@(when then [(mapv to-data-template then)])
                             ~(mapv to-data-template children)))
                :unless `(~'b/if (~'hb/false? ~(to-data-template arg0))
                           ~(mapv to-data-template children))
-               :with   `(~'b/let [~ctx-symb ~(to-data-template arg0)]
-                          ~(mapv to-data-template children))
+               :with   (let [then (:pre-else node)]
+                         `(~'b/let [~ctx-symb ~(to-data-template arg0)]
+                           [(~'b/if (~'seq ~ctx-symb)
+                              ~@(when then [(mapv to-data-template then)])
+                              ~(mapv to-data-template children))]))
                :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
                              loop-key?   (some (comp #{["@key"]}   :content) (:refs node))
                              index-options (when loop-index? [:indexed-by (loop-index-symbol ctx-nesting)])

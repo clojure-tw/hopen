@@ -138,11 +138,19 @@
 
       "{{#with a}}b{{/with}}"
       '[(b/let [hb/ctx1 (hopen/root :a)]
-          ["b"])]
+          [(b/if (seq hb/ctx1)
+             ["b"])])]
+
+      "{{#with a}}b{{else}}c{{/with}}"
+      '[(b/let [hb/ctx1 (hopen/root :a)]
+          [(b/if (seq hb/ctx1)
+             ["b"]
+             ["c"])])]
 
       "{{#with a.b}}c{{/with}}"
       '[(b/let [hb/ctx1 (get-in hopen/root [:a :b])]
-          ["c"])]
+          [(b/if (seq hb/ctx1)
+             ["c"])])]
 
       "aa {{#if bb}} cc {{#each dd.dd}} ee {{/each}} ff {{/if}} gg"
       '["aa "
