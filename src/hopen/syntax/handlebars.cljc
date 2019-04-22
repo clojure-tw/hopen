@@ -208,54 +208,49 @@
       :boolean-value (= arg0 "true")
       :number-value (parse-long arg0)
       :fn-call (let [[func & args] content]
-                 (list* (symbol func) (map to-data-template args)))
+                 `(~(symbol func) ~@(map to-data-template args)))
       :dotted-term (if (= (count content) 1)
                      (case arg0
                        "@index" (loop-index-symbol ctx-nesting)
                        "@key" (loop-key-symbol ctx-nesting)
-                       (list ctx-symb (keyword arg0)))
-                     (list 'get-in ctx-symb (mapv keyword content)))
+                       `(~ctx-symb ~(keyword arg0)))
+                     `(~'get-in ~ctx-symb ~(mapv keyword content)))
       :hash-params (into {}
                          (comp (partition-all 2)
                                (map (fn [[k v]] [(keyword k) (to-data-template v)])))
                          content)
-      :partial (list 'b/template
-                     (keyword arg0)
-                     (if arg1
-                       (list 'merge ctx-symb (to-data-template arg1))
-                       ctx-symb))
+      :partial `(~'b/template ~(keyword arg0)
+                              ~(if arg1
+                                 `(~'merge ~ctx-symb ~(to-data-template arg1))
+                                 ctx-symb))
       :block (case block-type
                :root   (mapv to-data-template children)
                :if     (if-let [then (seq (:then node))]
-                         (list 'b/if (list 'hb/true? (to-data-template arg0))
-                               (mapv to-data-template then)
-                               (mapv to-data-template children))
-                         (list 'b/if (list 'hb/true? (to-data-template arg0))
-                               (mapv to-data-template children)))
-               :unless (list 'b/if (list 'hb/false? (to-data-template arg0))
-                             (mapv to-data-template children))
-               :with   (list 'b/let [ctx-symb (to-data-template arg0)]
-                             (mapv to-data-template children))
+                         `(~'b/if (~'hb/true? ~(to-data-template arg0))
+                            ~(mapv to-data-template then)
+                            ~(mapv to-data-template children))
+                         `(~'b/if (~'hb/true? ~(to-data-template arg0))
+                            ~(mapv to-data-template children)))
+               :unless `(~'b/if (~'hb/false? ~(to-data-template arg0))
+                          ~(mapv to-data-template children))
+               :with   `(~'b/let [~ctx-symb ~(to-data-template arg0)]
+                          ~(mapv to-data-template children))
                :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
-                             index-options (if loop-index?
-                                             [:indexed-by (loop-index-symbol ctx-nesting)]
-                                             [])
-                             loop-key? (some (comp #{["@key"]} :content) (:refs node))
-                             key-options (if loop-key?
-                                           [(loop-key-symbol ctx-nesting) '(first hb/pair)]
-                                           [])]
+                             loop-key?   (some (comp #{["@key"]} :content) (:refs node))
+                             index-options (when loop-index? [:indexed-by (loop-index-symbol ctx-nesting)])
+                             key-options   (when loop-key? [(loop-key-symbol ctx-nesting) '(first hb/pair)])]
                          (if (= (:tag arg0) :each-as-args)
                            (let [[coll var index] (:content arg0)]
-                             (list 'b/for (into ['hb/pair (list 'hb/as-kvs (to-data-template coll))] index-options)
-                                   [(list 'b/let (into [ctx-symb (list 'assoc (ctx-symbol (dec ctx-nesting))
-                                                                       (keyword index) '(first hb/pair)
-                                                                       (keyword var) '(second hb/pair))]
-                                                       key-options)
-                                          (mapv to-data-template children))]))
-                           (list 'b/for (into ['hb/pair (list 'hb/as-kvs (to-data-template arg0))] index-options)
-                                 [(list 'b/let (into [ctx-symb '(second hb/pair)]
-                                                     key-options)
-                                        (mapv to-data-template children))])))
+                             `(~'b/for [~'hb/pair (~'hb/as-kvs ~(to-data-template coll)) ~@index-options]
+                                [(~'b/let [~ctx-symb (~'assoc ~(ctx-symbol (dec ctx-nesting))
+                                                       ~(keyword index) ~'(first hb/pair)
+                                                       ~(keyword var) ~'(second hb/pair))
+                                           ~@key-options]
+                                   ~(mapv to-data-template children))]))
+                           `(~'b/for [~'hb/pair (~'hb/as-kvs ~(to-data-template arg0)) ~@index-options]
+                                  [(~'b/let [~ctx-symb ~'(second hb/pair)
+                                             ~@key-options]
+                                     ~(mapv to-data-template children))])))
                ["Unhandled block-type:" node])
       ["Unhandled node type:" node])))
 
