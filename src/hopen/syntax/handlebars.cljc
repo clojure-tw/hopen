@@ -168,22 +168,17 @@
         (update :children (assoc-nesting-to-blocks 0)))))
 
 (defn assoc-references-to-context-blocks [root-node]
-  (postwalk (fn [n]
-              (if (and (map? n)
-                       (#{:root :with :each} (:block-type n)))
-                (let [block-nesting (:ctx-nesting n)
-                      refs (->> (tree-seq coll?
-                                          (fn [x]
-                                            (cond-> x
-                                              (map? x) (vals)))
-                                          n)
-                                (filter (fn [x]
-                                          (and (map? x)
-                                               (= (:tag x) :dotted-term)
-                                               (= (:ctx-nesting x) block-nesting))))
-                                (into []))]
-                  (assoc n :refs refs))
-                n))
+  (postwalk (fn [node]
+              (cond-> node
+                (and (map? node) (#{:root :with :each} (:block-type node)))
+                (assoc :refs (->> (tree-seq coll?
+                                            (fn [x] (cond-> x
+                                                      (map? x) (vals)))
+                                            node)
+                                  (filter (fn [x] (and (map? x)
+                                                       (= (:tag x) :dotted-term)
+                                                       (= (:ctx-nesting x) (:ctx-nesting node)))))
+                                  (into [])))))
             root-node))
 
 (defn- ctx-symbol [nesting-level]
@@ -209,12 +204,12 @@
       :number-value (parse-long arg0)
       :fn-call (let [[func & args] content]
                  `(~(symbol func) ~@(map to-data-template args)))
-      :dotted-term (if (= (count content) 1)
-                     (case arg0
-                       "@index" (loop-index-symbol ctx-nesting)
-                       "@key" (loop-key-symbol ctx-nesting)
-                       `(~ctx-symb ~(keyword arg0)))
-                     `(~'get-in ~ctx-symb ~(mapv keyword content)))
+      :dotted-term (case arg0
+                     "@index" (loop-index-symbol ctx-nesting)
+                     "@key" (loop-key-symbol ctx-nesting)
+                     (if (= (count content) 1)
+                       `(~ctx-symb ~(keyword arg0))
+                       `(~'get-in ~ctx-symb ~(mapv keyword content))))
       :hash-params (into {}
                          (comp (partition-all 2)
                                (map (fn [[k v]] [(keyword k) (to-data-template v)])))
@@ -236,9 +231,9 @@
                :with   `(~'b/let [~ctx-symb ~(to-data-template arg0)]
                           ~(mapv to-data-template children))
                :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
-                             loop-key?   (some (comp #{["@key"]} :content) (:refs node))
+                             loop-key?   (some (comp #{["@key"]}   :content) (:refs node))
                              index-options (when loop-index? [:indexed-by (loop-index-symbol ctx-nesting)])
-                             key-options   (when loop-key? [(loop-key-symbol ctx-nesting) '(first hb/pair)])]
+                             key-options   (when loop-key?   [(loop-key-symbol ctx-nesting) '(first hb/pair)])]
                          (if (= (:tag arg0) :each-as-args)
                            (let [[coll var index] (:content arg0)]
                              `(~'b/for [~'hb/pair (~'hb/as-kvs ~(to-data-template coll)) ~@index-options]
