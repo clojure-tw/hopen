@@ -243,19 +243,23 @@
                   :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
                                 loop-key?   (some (comp #{["@key"]}   :content) (:refs node))
                                 index-options (when loop-index? [:indexed-by (loop-index-symbol ctx-nesting)])
-                                key-options   (when loop-key?   [(loop-key-symbol ctx-nesting) '(first hb/pair)])]
-                            (if (= (:tag arg0) :each-as-args)
-                              (let [[coll var index] (:content arg0)]
-                                `[(~'b/for [~'hb/pair (~'hb/as-kvs ~(f-expr coll)) ~@index-options]
-                                    [(~'b/let [~ctx-symb (~'assoc ~(ctx-symbol (dec ctx-nesting))
-                                                           ~(keyword index) ~'(first hb/pair)
-                                                           ~(keyword var) ~'(second hb/pair))
-                                               ~@key-options]
-                                       ~(f-blocks children))])])
-                              `[(~'b/for [~'hb/pair (~'hb/as-kvs ~(f-expr arg0)) ~@index-options]
-                                      [(~'b/let [~ctx-symb ~'(second hb/pair)
-                                                 ~@key-options]
-                                         ~(f-blocks children))])]))
+                                key-options   (when loop-key?   [(loop-key-symbol ctx-nesting) '(first hb/pair)])
+                                [for-coll let-val-expr] (if (= (:tag arg0) :each-as-args)
+                                                          (let [[coll var index] (:content arg0)]
+                                                            [coll `(~'assoc ~(ctx-symbol (dec ctx-nesting))
+                                                                     ~(keyword index) ~'(first hb/pair)
+                                                                     ~(keyword var) ~'(second hb/pair))])
+                                                          [arg0 '(second hb/pair)])
+                                [for-children else-children] (if-let [pre-else (:pre-else node)]
+                                                               [pre-else children]
+                                                               [children])]
+                            `[(~'b/for [~'hb/pair (~'hb/as-kvs ~(f-expr for-coll)) ~@index-options]
+                                [(~'b/let [~ctx-symb ~let-val-expr
+                                           ~@key-options]
+                                   ~(f-blocks for-children))])
+                              ~@(when else-children
+                                  [`(~'b/if (~'empty? ~(f-expr for-coll))
+                                      ~(f-blocks else-children))])])
                   ["Unhandled block type:" node]))))
 
           (f-blocks [nodes]

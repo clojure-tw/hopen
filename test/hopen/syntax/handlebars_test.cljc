@@ -123,6 +123,13 @@
           [(b/let [hb/ctx1 (second hb/pair)]
              ["c"])])]
 
+      "{{#each a}}b{{else}}c{{/each}}"
+      '[(b/for [hb/pair (hb/as-kvs (hopen/root :a))]
+          [(b/let [hb/ctx1 (second hb/pair)]
+             ["b"])])
+        (b/if (empty? (hopen/root :a))
+           ["c"])]
+
       "{{#each a.b}}{{@index}}c{{/each}}"
       '[(b/for [hb/pair (hb/as-kvs (get-in hopen/root [:a :b])) :indexed-by hb/index1]
           [(b/let [hb/ctx1 (second hb/pair)]
