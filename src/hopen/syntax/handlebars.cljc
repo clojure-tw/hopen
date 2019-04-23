@@ -195,61 +195,73 @@
 
 (defn- to-data-template
   "Generates a data-template from a handlebars tree's node."
-  [node]
-  (let [{:keys [tag block-type content children ctx-nesting]} node
-        [arg0 arg1] content
-        ctx-symb (some-> ctx-nesting (ctx-symbol))]
-    (case tag
-      (:text :string-value) arg0
-      :boolean-value (= arg0 "true")
-      :number-value (parse-long arg0)
-      :fn-call (let [[func & args] content]
-                 `(~(symbol func) ~@(map to-data-template args)))
-      :dotted-term (case arg0
-                     "@index" (loop-index-symbol ctx-nesting)
-                     "@key" (loop-key-symbol ctx-nesting)
-                     (if (= (count content) 1)
-                       `(~ctx-symb ~(keyword arg0))
-                       `(~'get-in ~ctx-symb ~(mapv keyword content))))
-      :hash-params (into {}
-                         (comp (partition-all 2)
-                               (map (fn [[k v]] [(keyword k) (to-data-template v)])))
-                         content)
-      :partial `(~'b/template ~(keyword arg0)
-                              ~(if arg1
-                                 `(~'merge ~ctx-symb ~(to-data-template arg1))
-                                 ctx-symb))
-      :block (case block-type
-               :root   (mapv to-data-template children)
-               :if     (let [then (:pre-else node)]
-                         `(~'b/if (~'hb/true? ~(to-data-template arg0))
-                            ~@(when then [(mapv to-data-template then)])
-                            ~(mapv to-data-template children)))
-               :unless `(~'b/if (~'hb/false? ~(to-data-template arg0))
-                          ~(mapv to-data-template children))
-               :with   (let [then (:pre-else node)]
-                         `(~'b/let [~ctx-symb ~(to-data-template arg0)]
-                           [(~'b/if (~'seq ~ctx-symb)
-                              ~@(when then [(mapv to-data-template then)])
-                              ~(mapv to-data-template children))]))
-               :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
-                             loop-key?   (some (comp #{["@key"]}   :content) (:refs node))
-                             index-options (when loop-index? [:indexed-by (loop-index-symbol ctx-nesting)])
-                             key-options   (when loop-key?   [(loop-key-symbol ctx-nesting) '(first hb/pair)])]
-                         (if (= (:tag arg0) :each-as-args)
-                           (let [[coll var index] (:content arg0)]
-                             `(~'b/for [~'hb/pair (~'hb/as-kvs ~(to-data-template coll)) ~@index-options]
-                                [(~'b/let [~ctx-symb (~'assoc ~(ctx-symbol (dec ctx-nesting))
-                                                       ~(keyword index) ~'(first hb/pair)
-                                                       ~(keyword var) ~'(second hb/pair))
-                                           ~@key-options]
-                                   ~(mapv to-data-template children))]))
-                           `(~'b/for [~'hb/pair (~'hb/as-kvs ~(to-data-template arg0)) ~@index-options]
-                                  [(~'b/let [~ctx-symb ~'(second hb/pair)
-                                             ~@key-options]
-                                     ~(mapv to-data-template children))])))
-               ["Unhandled block-type:" node])
-      ["Unhandled node type:" node])))
+  [root-node]
+  (letfn [(f-expr [node]
+            (let [{:keys [tag content ctx-nesting]} node
+                  [arg0 arg1] content
+                  ctx-symb (some-> ctx-nesting (ctx-symbol))]
+              (case tag
+                (:text :string-value) arg0
+                :boolean-value (= arg0 "true")
+                :number-value (parse-long arg0)
+                :fn-call (let [[func & args] content]
+                           `(~(symbol func) ~@(map f-expr args)))
+                :dotted-term (case arg0
+                               "@index" (loop-index-symbol ctx-nesting)
+                               "@key" (loop-key-symbol ctx-nesting)
+                               (if (= (count content) 1)
+                                 `(~ctx-symb ~(keyword arg0))
+                                 `(~'get-in ~ctx-symb ~(mapv keyword content))))
+                :hash-params (into {}
+                                   (comp (partition-all 2)
+                                         (map (fn [[k v]] [(keyword k) (f-expr v)])))
+                                   content)
+                :partial `(~'b/template ~(keyword arg0)
+                                        ~(if arg1
+                                           `(~'merge ~ctx-symb ~(f-expr arg1))
+                                           ctx-symb))
+                ["Unhandled node type:" node])))
+
+          (f-block [node]
+            (let [{:keys [tag block-type content children ctx-nesting]} node
+                  [arg0] content
+                  ctx-symb (some-> ctx-nesting (ctx-symbol))]
+              (if (not= tag :block)
+                [(f-expr node)]
+                (case block-type
+                  :if     (let [then (:pre-else node)]
+                            `[(~'b/if (~'hb/true? ~(f-expr arg0))
+                                ~@(when then [(f-blocks then)])
+                                ~(f-blocks children))])
+                  :unless `[(~'b/if (~'hb/false? ~(f-expr arg0))
+                              ~(f-blocks children))]
+                  :with   (let [then (:pre-else node)]
+                            `[(~'b/let [~ctx-symb ~(f-expr arg0)]
+                               [(~'b/if (~'seq ~ctx-symb)
+                                  ~@(when then [(f-blocks then)])
+                                  ~(f-blocks children))])])
+                  :each   (let [loop-index? (some (comp #{["@index"]} :content) (:refs node))
+                                loop-key?   (some (comp #{["@key"]}   :content) (:refs node))
+                                index-options (when loop-index? [:indexed-by (loop-index-symbol ctx-nesting)])
+                                key-options   (when loop-key?   [(loop-key-symbol ctx-nesting) '(first hb/pair)])]
+                            (if (= (:tag arg0) :each-as-args)
+                              (let [[coll var index] (:content arg0)]
+                                `[(~'b/for [~'hb/pair (~'hb/as-kvs ~(f-expr coll)) ~@index-options]
+                                    [(~'b/let [~ctx-symb (~'assoc ~(ctx-symbol (dec ctx-nesting))
+                                                           ~(keyword index) ~'(first hb/pair)
+                                                           ~(keyword var) ~'(second hb/pair))
+                                               ~@key-options]
+                                       ~(f-blocks children))])])
+                              `[(~'b/for [~'hb/pair (~'hb/as-kvs ~(f-expr arg0)) ~@index-options]
+                                      [(~'b/let [~ctx-symb ~'(second hb/pair)
+                                                 ~@key-options]
+                                         ~(f-blocks children))])]))
+                  ["Unhandled block type:" node]))))
+
+          (f-blocks [nodes]
+            (into [] (mapcat f-block) nodes))]
+
+    (f-blocks (:children root-node))))
 
 (defn parse [template]
   (-> (transduce (comp (part/template-partition part/default-delimiters)
