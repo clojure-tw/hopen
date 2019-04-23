@@ -9,7 +9,7 @@ A simple, modern, flexible and portable template engine for Clojure environments
 ## Usage
 
 ```clojure
-(ns myproject.core
+(ns my-project.core
   (:require [hopen.syntax.handlebars :as hb] ; choose a parser
             [hopen.renderer.xf :as rxf]      ; choose a renderer
             [hopen.renderer.env :as env]))
@@ -36,7 +36,7 @@ A simple, modern, flexible and portable template engine for Clojure environments
   (let [env (-> env/standard-env
                 (hb/with-handlebars-env)
                 (rxf/with-renderer-env))]
-    (transduce (renderer parsed-template env) str [data])))
+    (transduce (rxf/renderer parsed-template env) str [data])))
 ```
 
 ## Introduction
@@ -98,7 +98,7 @@ a wide range of environments (JVM, Chrome, Firefox and NodeJS).
 The project is currently a work in progress.
 
 Syntaxes currently supported:
-- [ ] [Handlebars](https://handlebarsjs.com/) - WIP, 90% completed.
+- [ ] [Handlebars](https://handlebarsjs.com/) - WIP, 97.3% completed.
 - [ ] Silly-J, a syntax similar to Clojure - WIP.
 
 Renderers currently supported:
