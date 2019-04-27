@@ -2,7 +2,28 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                                    :include-macros true])
-            [hopen.renderer.xf :refer [renderer default-env]]))
+            [hopen.renderer.xf :refer [renderer with-renderer-env]]
+            [hopen.renderer.env :as env]))
+
+(def default-env (with-renderer-env env/standard-env))
+
+(deftest seq?-test
+  (testing "Check if those assumptions are consistent across all the platforms."
+    (are [data]
+      (seq? data)
+
+      (list 1 2 3)
+      (cons 1 (list 2 3))
+      '(1 2 3)
+      `(1 2 3))
+
+    (are [data]
+      (not (seq? data))
+
+      "1 2 3"
+      [1 2 3]
+      {1 2 3 4}
+      #{1 2 3 4})))
 
 (deftest renderer-test
 
@@ -93,6 +114,10 @@
                   b (range 1 3) :separated-by ["-"]]
             [a b])]
         [:a 1 "-" :a 2 "|" :b 1 "-" :b 2 "|" :c 1 "-" :c 2]
+
+        ['(b/for [a [:a :b :c] :indexed-by i]
+            [a i])]
+        [:a 0 :b 1 :c 2]
 
         ;; Inline for
         ['(conj (for [a [:a :b :c] b (range 2)] [a b]) :x)]
@@ -204,4 +229,43 @@
               "Alice play SNES with Leonard"
               "Alice learn Clojure with Leonard"
               "Eugenie play SNES with Leonard"
-              "Eugenie learn Clojure with Leonard"])))))
+              "Eugenie learn Clojure with Leonard"]))))
+
+  (testing "inner templates"
+    (let [template '["Person list:\n"
+                     (b/for [person (hopen/ctx :persons)]
+                       ["- " (b/template :person person) "\n"])]
+          person-template '["name: " (hopen/ctx :name) ", "
+                            "age: " (hopen/ctx :age)]
+          data {:persons [{:name "Alice", :age 25}
+                          {:name "Leonard", :age 23}]}
+          env (update default-env :templates assoc
+                      :person person-template)]
+      (is (= (into []
+                   (renderer template env)
+                   [data])
+             ["Person list:\n"
+              "- " "name: " "Alice" ", " "age: " 25 "\n"
+              "- " "name: " "Leonard" ", " "age: " 23 "\n"]))))
+
+  (testing "inner templates, parent-root"
+    (let [root-template '["My root data is " hopen/root
+                          " and my parent's root data is " hopen/parent-root ".\n"
+                          "Inner-template:\n"
+                          (b/template :inner-tpl (hopen/ctx :inner))]
+          inner-template '["My root data is " hopen/root
+                           " and my parent's root data is " hopen/parent-root ".\n"]
+          data {:whoami :da-root
+                :inner {:whoami :da-inner}}
+          env (update default-env :templates assoc
+                      :inner-tpl inner-template)]
+      (is (= (into []
+                   (renderer root-template env)
+                   [data])
+             ["My root data is " {:whoami :da-root
+                                  :inner {:whoami :da-inner}}
+              " and my parent's root data is " nil ".\n"
+              "Inner-template:\n"
+              "My root data is " {:whoami :da-inner}
+              " and my parent's root data is " {:whoami :da-root
+                                                :inner {:whoami :da-inner}} ".\n"])))))

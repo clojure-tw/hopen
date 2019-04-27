@@ -1,4 +1,18 @@
-(ns hopen.util)
+(ns hopen.util
+  (:require [clojure.string :as str]))
+
+(defn triml
+  "Trims the white spaces at the beginning of each line in the text, including the delimiter."
+  ([text] (triml text "|"))
+  ([text delimiter]
+   (transduce (comp (map (fn [line]
+                           (let [trimmed (str/triml line)]
+                             (if (str/starts-with? trimmed delimiter)
+                               (subs trimmed (count delimiter))
+                               line))))
+                    (interpose "\n"))
+              str
+              (str/split-lines text))))
 
 (defn binding-partition
   "A transducer which is partitioning a multi-variables binding sequence."
@@ -28,14 +42,13 @@
                        [symb value options]))))
         bindings))
 
-(defn collect [data keys]
-  (into [] (keep #(get data %) keys)))
+(defn parse-long [s]
+  #?(:cljs (js/parseInt s)
+     :clj (Long/parseLong s)))
 
-(defn collect-in [data path]
-  (when (seq path)
-    (reduce (fn [coll keys]
-              (into []
-                    (mapcat (fn [item] (collect item keys)))
-                    coll))
-            [data]
-            path)))
+(defn update-existing
+  "Updates the map only on the keys that already exist in the map."
+  [m k f & args]
+  (if (contains? m k)
+    (apply update m k f args)
+    m))
