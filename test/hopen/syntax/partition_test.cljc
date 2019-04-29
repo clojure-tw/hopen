@@ -2,8 +2,9 @@
   (:require #?(:clj  [clojure.test :refer [deftest testing is are]]
                :cljs [cljs.test    :refer [deftest testing is are]
                       :include-macros true])
-            [hopen.syntax.partition :as part]
-            [instaparse.gll :refer [text->segment]]))
+            [hopen.syntax.partition :as part :refer [template-partition]]
+            [clojure.walk :refer [postwalk]]
+            [instaparse.gll :refer [text->segment sub-sequence]]))
 
 (deftest re-matches-test
   (testing "Check that some edge cases on regexp are consistent across the platforms."
@@ -55,3 +56,14 @@
 
   (is (thrown? #?(:clj Exception, :cljs js/Error)
                (#'part/parse-syntax-segment (text->segment "aoeu") "}}"))))
+
+(deftest template-partition-test
+  (is (= (->> (into []
+                    (template-partition part/default-delimiters)
+                    ["hello {{foo ~ bar}} world!"])
+              (postwalk (fn [x]
+                          (cond-> x
+                            (= (type x) instaparse.gll.Segment) (str)))))
+         [[:text ["hello "]]
+          [:syntax "foo ~ bar"]
+          [:text [" world!"]]])))
